@@ -1,0 +1,39 @@
+* text=auto eol=lf
+
+*.rs      text diff=rust
+*.toml    text
+*.kt      text diff=kotlin
+*.kts     text diff=kotlin
+*.swift   text diff=swift
+*.ts      text
+*.md      text diff=markdown
+*.json    text
+*.yml     text
+*.yaml    text
+*.css     text
+*.html    text diff=html
+*.svg     text
+*.sh      text eol=lf
+
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.webp    binary
+*.avif    binary
+*.ico     binary
+*.woff2   binary
+*.pdf     binary
+*.mp4     binary
+*.MP4     binary
+*.h264    binary
+*.aac     binary
+*.c2pa    binary
+*.tsr     binary
+*.ots     binary
+
+# Keep generated artefacts out of pull-request diffs while still tracking them.
+core/crates/adiungere-ffi/generated/** linguist-generated=true
+design/tokens/generated/**            linguist-generated=true
+
+# The repository is a polyglot product; report its real composition.
+docs/**  linguist-documentation=true

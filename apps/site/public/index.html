@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>adiungere</title>
+    <meta
+      name="description"
+      content="A dashcam with two cameras writes one file holding both. adiungere finds those recordings,
+               plays either camera or both, and exports each one without re-encoding it."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://adiungere.com/" />
+    <style>
+      :root {
+        --ink: #16181c;
+        --ink-soft: #4a4f57;
+        --ground: #fbfbfa;
+        --panel: #ffffff;
+        --rule: #d9d9d6;
+        --accent: #16181c;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #ececea;
+          --ink-soft: #a4a8ae;
+          --ground: #121316;
+          --panel: #191b1f;
+          --rule: #313439;
+          --accent: #ececea;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        padding: 3rem 1.5rem 4rem;
+        background: var(--ground);
+        color: var(--ink);
+        font: 1rem/1.65 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      main {
+        max-width: 44rem;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 0.25rem;
+        font-size: clamp(2rem, 6vw, 2.75rem);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .pronounce {
+        margin: 0 0 2rem;
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+      }
+
+      h2 {
+        margin: 2.5rem 0 0.75rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      p {
+        margin: 0 0 1rem;
+        max-width: 40rem;
+      }
+
+      .lead {
+        font-size: 1.15rem;
+        line-height: 1.55;
+      }
+
+      .status {
+        margin: 2rem 0;
+        padding: 1rem 1.25rem;
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        border-radius: 0.5rem;
+      }
+
+      .status p:last-child {
+        margin-bottom: 0;
+      }
+
+      .status strong {
+        font-weight: 600;
+      }
+
+      ul {
+        margin: 0 0 1rem;
+        padding-left: 1.15rem;
+      }
+
+      li {
+        margin-bottom: 0.35rem;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.2em;
+      }
+
+      a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 2px;
+      }
+
+      footer {
+        margin-top: 3.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--rule);
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+      }
+
+      footer p {
+        margin-bottom: 0.4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>adiungere</h1>
+      <p class="pronounce">Latin: to join, to attach to.</p>
+
+      <p class="lead">
+        A dashcam with two cameras does not write two files. It writes one file holding both, and every
+        gallery shows the first camera and nothing else. The rear camera is in the file. Nothing offers to
+        show it.
+      </p>
+
+      <p>
+        Reaching it today means a command line and an external tool. That route works, and it silently
+        discards the vendor telemetry the camera recorded alongside the video: the camera identity, one
+        satellite fix per second, and the motion records that say how hard the car was hit.
+      </p>
+
+      <p>
+        These recordings are used as evidence. adiungere finds them, plays either camera or both together,
+        and exports each one without re-encoding it, keeping the telemetry that every other route throws
+        away. Nothing is uploaded: the work happens on the device holding the recording.
+      </p>
+
+      <div class="status">
+        <p><strong>Not built yet.</strong> This is the foundation, in the open, from the first commit.</p>
+        <p>
+          What exists today is the plan, the decisions behind it, the register of everything still unknown,
+          and the tests that refuse to let the project claim more than it can prove. What does not exist is
+          the product.
+        </p>
+      </div>
+
+      <h2>What it will prove, and what it will not</h2>
+
+      <p>
+        The strongest true statement any tool of this kind can make is that a sequence of bytes matches a
+        digest recorded earlier. That is worth having, and it is narrow. adiungere will show that an extract
+        carries the same video samples as the recording it came from, that a file has not changed since it
+        was first seen, and that it existed no later than a given moment.
+      </p>
+
+      <p>
+        It will never say a recording is authentic, or that what it shows happened. Nothing attests for the
+        camera, and no tool can reach either question. Saying otherwise would be the one thing that makes
+        such a tool worse than useless in the place it is meant to be used.
+      </p>
+
+      <h2>Follow along</h2>
+
+      <ul>
+        <li><a href="https://github.com/LennyObez/adiungere">The repository</a>, open source under Apache 2.0</li>
+        <li><a href="https://github.com/LennyObez/adiungere/blob/main/docs/roadmap.md">The roadmap</a>, eleven milestones, each ending in a demonstration</li>
+        <li><a href="https://github.com/LennyObez/adiungere/blob/main/docs/evidence.md">The evidence register</a>, thirty-six questions and what is known about each</li>
+      </ul>
+
+      <footer>
+        <p>Free software under the Apache License 2.0.</p>
+        <p>
+          Security contact: <a href="/.well-known/security.txt">/.well-known/security.txt</a>
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

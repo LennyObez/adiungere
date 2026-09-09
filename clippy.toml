@@ -1,0 +1,39 @@
+# Lint levels live in core/Cargo.toml under the workspace lint tables. This file only tunes how individual
+# lints behave.
+#
+# It sits at the repository root rather than beside the workspace, because the tools that read it search from
+# the current directory upwards. Beside the workspace it would be found when a command ran from there and
+# missed when the same command ran from the root, which is how a local run and a pipeline run stop agreeing.
+
+msrv = "1.98"
+
+# A test that cannot fail loudly is not a test. The panicking constructs are denied in library and binary
+# code and allowed in tests, which is the whole point of denying them elsewhere.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+
+# Acronyms and names that are correct without backticks in documentation.
+doc-valid-idents = [
+    "..",
+    "ISOBMFF",
+    "MP4",
+    "NAL",
+    "GPS",
+    "NMEA",
+    "AAC",
+    "WebAssembly",
+    "WebCodecs",
+    "GStreamer",
+    "SwiftUI",
+    "PhotoKit",
+    "GitHub",
+]
+
+# Process invocation is how the guarantee suite asks git what is tracked. It always uses an argument vector,
+# never a shell, so nothing here is ever interpolated into a command line.
+disallowed-methods = [
+    { path = "std::env::set_var", reason = "process-global mutation; pass configuration instead" },
+    { path = "std::env::remove_var", reason = "process-global mutation; pass configuration instead" },
+]

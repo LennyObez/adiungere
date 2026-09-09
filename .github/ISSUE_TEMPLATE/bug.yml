@@ -1,0 +1,80 @@
+name: Bug
+description: Something behaves differently from what it guarantees.
+labels: ['type:bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problems do not go here. See [SECURITY.md](../blob/main/SECURITY.md).
+
+        **Please do not attach a recording.** Dashcam footage carries satellite positions, a route, and other
+        people's vehicles and faces. Everything below can be answered from the structure of the file rather
+        than from its content, and `adiungere inspect --json` prints exactly that.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Website
+        - Command line
+        - Windows
+        - Linux
+        - Android
+        - iOS or macOS
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The version and commit shown in the about panel, or the output of `adiungere --version`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If a documented guarantee is broken, name it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Smallest reproduction
+      description: The shortest sequence that produces it, every time.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: structure
+    attributes:
+      label: File structure, if a recording is involved
+      description: >-
+        The output of `adiungere inspect --json`, or the camera make and model, the track layout and the
+        approximate size. Never the recording itself.
+      render: json
+    validations:
+      required: false
+
+  - type: input
+    id: locale
+    attributes:
+      label: Interface language
+      description: Several defects only appear in one language.
+    validations:
+      required: false

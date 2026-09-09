@@ -1,0 +1,13 @@
+# Every path has an owner. Four paths are listed separately because a change to any of them changes what the
+# product promises rather than what it does: the guarantee suite, the format reader, the provenance pipeline
+# and the decision records.
+
+*                                       @LennyObez
+
+/core/crates/adiungere-guarantees/      @LennyObez
+/core/crates/adiungere-isobmff/         @LennyObez
+/core/crates/adiungere-provenance/      @LennyObez
+/docs/adr/                              @LennyObez
+/docs/evidence.md                       @LennyObez
+/.github/workflows/                     @LennyObez
+/infra/                                 @LennyObez

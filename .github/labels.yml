@@ -1,0 +1,147 @@
+# Labels are declared here and applied by .github/workflows/labels.yml, on every change to this file and once
+# a week. A label edited in the interface has its colour and description restored; a label created by hand is
+# left alone, because deleting one would strip it from every issue that carries it.
+
+# Type: what kind of work this is. Mirrors the work type field on the project board.
+- name: 'type:epic'
+  color: '5A32A3'
+  description: A milestone-sized body of work with child issues
+- name: 'type:feature'
+  color: '0E8A16'
+  description: A capability the product should have
+- name: 'type:bug'
+  color: 'D73A4A'
+  description: Behaviour differs from what is guaranteed
+- name: 'type:chore'
+  color: 'C5DEF5'
+  description: Maintenance with no user-visible change
+- name: 'type:security'
+  color: 'B60205'
+  description: Attack surface, credentials, or data handling
+- name: 'type:probe'
+  color: 'FBCA04'
+  description: A question to answer by measurement before something can be decided
+- name: 'type:docs'
+  color: '006B75'
+  description: Documentation
+
+# Area: which part of the product. Mirrors docs/architecture.md.
+- name: 'area:isobmff'
+  color: 'BFD4F2'
+  description: Box reader, sample iterator, remuxer
+- name: 'area:fingerprint'
+  color: 'BFD4F2'
+  description: Track fingerprints and digests
+- name: 'area:manifest'
+  color: 'BFD4F2'
+  description: Integrity manifest, schema and verification
+- name: 'area:provenance'
+  color: 'BFD4F2'
+  description: Content Credentials, signing and time stamping
+- name: 'area:scan'
+  color: 'BFD4F2'
+  description: Finding, recognising and pairing dashcam files
+- name: 'area:telemetry'
+  color: 'BFD4F2'
+  description: Vendor telemetry parsing and rendering
+- name: 'area:cli'
+  color: 'BFD4F2'
+  description: The command line, which is the executable specification
+- name: 'area:web'
+  color: 'D4C5F9'
+  description: The shared player and export interface
+- name: 'area:site'
+  color: 'D4C5F9'
+  description: adiungere.com, its pages and its deployment
+- name: 'area:windows'
+  color: 'D4C5F9'
+  description: The Windows shell
+- name: 'area:linux'
+  color: 'D4C5F9'
+  description: The Linux shell and its media pipeline
+- name: 'area:android'
+  color: 'D4C5F9'
+  description: The Android application
+- name: 'area:apple'
+  color: 'D4C5F9'
+  description: The iOS and macOS application
+- name: 'area:relay'
+  color: 'D4C5F9'
+  description: The signing and time-stamping service
+- name: 'area:design'
+  color: 'D4C5F9'
+  description: Design tokens and the design system
+- name: 'area:docs'
+  color: 'C5DEF5'
+  description: Documentation, decision records and the evidence register
+- name: 'area:infra'
+  color: 'C5DEF5'
+  description: Deployment and environments
+- name: 'area:ci'
+  color: 'C5DEF5'
+  description: Pipelines and quality gates
+
+# Priority
+- name: 'priority:p0'
+  color: 'B60205'
+  description: Critical. Drop other work
+- name: 'priority:p1'
+  color: 'D93F0B'
+  description: High
+- name: 'priority:p2'
+  color: 'FBCA04'
+  description: Normal
+- name: 'priority:p3'
+  color: 'C2E0C6'
+  description: Low
+
+# Cross-cutting concerns, which are not an area of the code but a property of the work.
+- name: 'accessibility'
+  color: '0E8A16'
+  description: Touches how the product behaves for assistive technology
+- name: 'evidence'
+  color: '5319E7'
+  description: Touches what the product claims about a file, or how it says it
+- name: 'privacy'
+  color: '5319E7'
+  description: Touches personal data, including footage of people and vehicles
+- name: 'dependencies'
+  color: '0366D6'
+  description: Applied by the dependency update bot
+- name: 'rust'
+  color: 'B7410E'
+  description: Applied by the dependency update bot to core dependencies
+- name: 'github-actions'
+  color: '0366D6'
+  description: Applied by the dependency update bot to workflow dependencies
+
+# Triage outcomes
+- name: 'duplicate'
+  color: 'CFD3D7'
+  description: Already tracked elsewhere
+- name: 'wontfix'
+  color: 'FFFFFF'
+  description: Understood and deliberately not being done
+- name: 'question'
+  color: 'D876E3'
+  description: Needs an answer before it can become work
+- name: 'help wanted'
+  color: '008672'
+  description: Well understood, and open to anyone who wants it
+
+# State
+- name: 'blocked'
+  color: '000000'
+  description: Cannot proceed until something else resolves
+- name: 'needs-hardware'
+  color: 'FEF2C0'
+  description: Cannot proceed without a device, an account or an access nobody has yet
+- name: 'needs-research'
+  color: 'FEF2C0'
+  description: Requires a primary source before it can be built
+- name: 'good first issue'
+  color: '7057FF'
+  description: Self-contained, with the context needed to start
+- name: 'guarantee'
+  color: '0052CC'
+  description: Adds or changes a product guarantee enforced by a test

@@ -1,0 +1,80 @@
+name: Analysis
+
+# Code scanning and dependency review. Neither is a gate: they report, and a finding is triaged rather than
+# blocking a merge automatically. That is deliberate. A scanner with no demonstrated impact should not be able
+# to stop work, and a scanner nobody reads should not exist.
+#
+# The workflow language matters as much as the Rust one here. A pipeline in this repository can write labels,
+# and a later one will publish releases, so a workflow that interpolates untrusted text into a shell command
+# is a real finding rather than a theoretical one.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '41 5 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analysis-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  code_scanning:
+    name: Code scanning (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+    strategy:
+      # One language failing must not hide the other's result.
+      fail-fast: false
+      matrix:
+        language: [actions, rust]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialise
+        uses: github/codeql-action/init@977e6ceaea7361825998245d787fa3b4d6b9e5df # codeql-bundle-v2.27.0
+        with:
+          languages: ${{ matrix.language }}
+          # Source analysis, so nothing is compiled here and no compiler version is named. The build is the
+          # core workflow's job.
+          build-mode: none
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@977e6ceaea7361825998245d787fa3b4d6b9e5df # codeql-bundle-v2.27.0
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency_review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Only a pull request has two commits to compare, which is what this reviews.
+    if: github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The licence list is the same policy the supply-chain step enforces over the resolved graph. Stating it
+      # here means a pull request that adds a reciprocal dependency says so in the review rather than in a log.
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low
+          allow-licenses: >-
+            Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0, Zlib, 0BSD, CC0-1.0, MPL-2.0
+          comment-summary-in-pr: on-failure

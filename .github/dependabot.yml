@@ -1,0 +1,36 @@
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /core
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - rust
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions:
+        patterns:
+          - '*'
+
+# The npm, gradle and swift ecosystems are added with the manifests they read, in M4, M7 and M8. Declaring an
+# ecosystem whose manifest does not exist makes the update bot log an error on every run, which trains
+# everyone to ignore its reports.

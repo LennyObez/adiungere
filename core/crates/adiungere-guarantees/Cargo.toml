@@ -1,0 +1,25 @@
+[package]
+name = "adiungere-guarantees"
+description = "The properties this repository refuses to let anyone break, each expressed as a test."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+[lib]
+name = "adiungere_guarantees"
+path = "src/lib.rs"
+
+# One guarantee asks the product's own reader to parse the evidence register and the roadmap, rather than
+# reimplementing either. A second implementation would agree with the first until the day it mattered.
+[dev-dependencies]
+adiungere-cli = { path = "../adiungere-cli" }
+
+[lints]
+workspace = true

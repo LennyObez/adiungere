@@ -1,0 +1,43 @@
+name: Feature
+description: A capability the product should have.
+labels: ['type:feature']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: Describe what a person cannot do today, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who this is for
+      options:
+        - Someone who needs to see what their camera recorded
+        - Someone assembling an insurance claim
+        - A lawyer or an expert checking a file
+        - Anyone
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: How we would know it works
+      description: The observable outcome. A feature with no measurable outcome cannot be finished.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints this must respect
+      options:
+        - label: Sends no recording anywhere, and adds no request that leaves the device
+        - label: Never opens a source recording for writing
+        - label: Claims nothing about authenticity, and adds no status that reads as a verdict
+        - label: Preserves the vendor telemetry through any export it adds
+        - label: Adds no user-visible string outside the wording catalogue
+        - label: Has a keyboard and screen-reader path if it involves a gesture

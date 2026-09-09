@@ -1,0 +1,52 @@
+name: Repository
+
+# This workflow carries no path filter, on purpose. The guarantees it runs assert properties of the whole
+# repository: which files may exist, which characters they may contain, that every directory holding source
+# is built by some pipeline, that every documentation link resolves. Putting them behind a filter would mean
+# a change under docs/ or .github/ could break one of them with no pipeline noticing.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-${{ github.ref }}
+  # Never cancel a run on the default branch: a merged commit whose checks never finished leaves the branch
+  # in a state nobody measured.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  guarantees:
+    name: Repository guarantees
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # No version is named here. The toolchain file at the repository root is the only place one exists, and
+      # a guarantee refuses any workflow that restates it.
+      - name: Resolve the pinned toolchain
+        run: |
+          rustup show active-toolchain
+          cargo --version
+          rustc --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      # The guarantee suite lists tracked files through git, so it needs a real checkout rather than a
+      # sparse one, and it fails loudly if git returns nothing rather than reporting success on an empty
+      # scan.
+      - name: Run the guarantee suite
+        working-directory: core
+        run: cargo test -p adiungere-guarantees --tests
+
+      - name: The evidence register agrees with the roadmap
+        working-directory: core
+        run: cargo run --quiet -p adiungere-cli -- probes check

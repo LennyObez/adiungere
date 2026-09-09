@@ -1,0 +1,61 @@
+# Supply-chain policy for the core.
+#
+# The outbound licence is Apache-2.0 (ADR-0003), so the allow list holds permissive licences compatible with
+# it. Reciprocal licences are not listed and are therefore refused, which is the mechanism that keeps a
+# general-purpose media library out of the graph (ADR-0002).
+#
+# Every version in Cargo.toml is exact and the lock file is committed, so this file guards what those
+# versions bring with them.
+
+[graph]
+all-features = true
+
+[output]
+feature-depth = 1
+
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+# An ignored advisory is a decision, not a convenience. Each entry carries the reason and the date it was
+# taken, and is revisited when the dependency moves.
+ignore = []
+
+[licenses]
+confidence-threshold = 0.93
+# The allow list is a policy, not an inventory of what the graph happens to contain today. An entry nothing
+# matches is a licence this project would accept if a dependency arrived under it, which is the point.
+unused-allowed-license = "allow"
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "0BSD",
+    "CC0-1.0",
+    "MPL-2.0",
+]
+# No exception. An exception here would be a crate whose licence the policy refuses, kept anyway.
+exceptions = []
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+# A crate inside this workspace is reached by path and is never published, so it has no version requirement to
+# pin and no registry to resolve from. The wildcard rule exists to stop a published crate depending on "any
+# version" of something from a registry, which this cannot be.
+allow-wildcard-paths = true
+highlight = "all"
+allow = []
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

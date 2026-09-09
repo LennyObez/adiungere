@@ -1,0 +1,18 @@
+# Cargo behaviour. Profiles, dependencies and lint policy live in Cargo.toml.
+
+[net]
+git-fetch-with-cli = true
+retry = 3
+
+[term]
+color = "auto"
+
+[future-incompat-report]
+frequency = "always"
+
+# Shorthands for the gate steps. They are shorthands only: the sequence itself is scripts/gate.sh, because a
+# sequence has to read each exit code before running the next step and an alias cannot do that.
+[alias]
+lint = "clippy --workspace --all-targets --all-features -- -D warnings"
+guarantees = "test -p adiungere-guarantees --tests"
+probes = "run --quiet -p adiungere-cli -- probes"

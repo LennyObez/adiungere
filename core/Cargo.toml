@@ -1,0 +1,65 @@
+[workspace]
+resolver = "3"
+members = ["crates/adiungere-cli", "crates/adiungere-guarantees"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.98"
+license = "Apache-2.0"
+authors = ["Lenny Obez <github@lennyobez.com>"]
+repository = "https://github.com/LennyObez/adiungere"
+homepage = "https://adiungere.com"
+keywords = ["dashcam", "mp4", "isobmff", "provenance", "forensics"]
+categories = ["multimedia::video", "command-line-utilities"]
+publish = false
+
+# Every version is exact. A caret range means a dependency can change between two builds of the same commit,
+# which is unacceptable in a product whose central claim is that the same input produces the same bytes.
+[workspace.dependencies]
+clap = { version = "=4.6.6", features = ["derive"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+
+[workspace.lints.rust]
+# Forbid rather than deny: a crate cannot lift it locally. The two binding crates that will need unsafe code
+# arrive in M7 and M8, and each will opt out explicitly, at the site of use, with a written reason. Until
+# then there is no unsafe code anywhere and the guarantee says so.
+unsafe_code = "forbid"
+missing_docs = "deny"
+missing_debug_implementations = "deny"
+unreachable_pub = "deny"
+unused_must_use = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+
+# The core runs inside six host applications. A panic in a library crate takes down the application that
+# hosts it, on a file the person needed. Tests are exempt through clippy.toml, because an assertion that
+# cannot fail loudly is not an assertion.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+integer_division = "deny"
+dbg_macro = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+debug = false
+# Overflow checks stay on in release. This code computes offsets and lengths into files that may be larger
+# than four gigabytes, and a wrapped offset produces a file that plays and proves nothing.
+overflow-checks = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+overflow-checks = true

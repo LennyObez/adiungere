@@ -1,0 +1,45 @@
+# Citation File Format 1.2.0, https://citation-file-format.github.io
+#
+# Update `version` and `date-released` at every tagged release. Guarantee G08 checks that the licence named
+# here agrees with the licence file and the workspace manifest.
+
+cff-version: 1.2.0
+title: adiungere
+message: >-
+  If you use this software, or the integrity specification it publishes, in research, in an expert report or
+  in derivative work, please cite it using this metadata. Cite the version you depend on; where a commit
+  matters more than a version, the signed commit is the identifier.
+type: software
+
+abstract: >-
+  adiungere reads dashcam recordings that hold more than one camera in a single ISO base media file. It
+  finds them in a library, plays either camera or both together, exports each one without re-encoding it,
+  and preserves the vendor telemetry that general-purpose media pipelines discard. It publishes a per-track
+  fingerprint and an integrity manifest that a third party can reproduce with ordinary tools, and it states
+  plainly what those artefacts prove and what they do not.
+
+authors:
+  - family-names: Obez
+    given-names: Lenny
+    website: https://github.com/LennyObez
+
+version: 0.0.0
+date-released: '2026-09-09'
+
+license: Apache-2.0
+license-url: https://www.apache.org/licenses/LICENSE-2.0.txt
+
+repository-code: https://github.com/LennyObez/adiungere
+url: https://adiungere.com
+
+keywords:
+  - dashcam
+  - iso-base-media-file-format
+  - mp4
+  - multi-track-video
+  - lossless-remux
+  - provenance
+  - content-credentials
+  - digital-evidence
+  - telemetry-preservation
+  - rust

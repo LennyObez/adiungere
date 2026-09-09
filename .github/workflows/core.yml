@@ -1,0 +1,84 @@
+name: Core
+
+# The path filter applies to pushes only. On a pull request this workflow always runs, because it provides a
+# required status check: a filtered check that never fires is not skipped, it is permanently pending, and the
+# pull request can never merge.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/core.yml'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+defaults:
+  run:
+    working-directory: core
+
+jobs:
+  gates:
+    name: Core
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve the pinned toolchain
+        run: |
+          rustup show active-toolchain
+          cargo --version
+          rustc --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      # The gate sequence from docs/testing.md, one step each. Nothing is piped and nothing is chained, so a
+      # failure names itself instead of reporting the status of whatever ran last.
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Lints
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --workspace --lib
+
+      - name: Integration and guarantee tests
+        run: cargo test --workspace --tests
+
+      - name: Documentation tests
+        run: cargo test --workspace --doc
+
+      # The lock file is committed so that a build of a given commit resolves the same graph every time. This
+      # proves the committed one is the one the manifests describe.
+      - name: The lock file matches the manifests
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+  supply_chain:
+    name: Supply chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Advisories, licences, sources and bans
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: core/Cargo.toml
+          command: check

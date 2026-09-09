@@ -1,0 +1,39 @@
+name: Site
+
+# The path filter applies to pushes only. On a pull request this workflow always runs, because it provides a
+# required status check: a filtered check that never fires is not skipped, it is permanently pending.
+#
+# Publishing is not done here. The host pulls the default branch and publishes one directory of it, so what a
+# visitor receives traces back to a commit whose signature verifies, and no pipeline holds a credential that
+# could write to the server.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/site/**'
+      - 'scripts/**'
+      - '.github/workflows/site.yml'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  checks:
+    name: Site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: The page loads nothing from another host, and the security contact is current
+        run: ./scripts/check-site.sh
+
+      - name: Shell scripts
+        run: shellcheck scripts/check-site.sh scripts/gate.sh

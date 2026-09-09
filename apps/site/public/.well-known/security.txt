@@ -1,0 +1,12 @@
+# Security contact for adiungere, in the form RFC 9116 defines.
+# The policy this points at explains what is in scope and what to expect.
+
+# Contacts are in order of preference. The first keeps the report confidential until a fix exists and gives
+# the reporter a record of it; the second is for anyone who would rather write an email.
+
+Contact: https://github.com/LennyObez/adiungere/security/advisories/new
+Contact: mailto:security@lennyobez.com
+Expires: 2027-06-30T23:59:59.000Z
+Preferred-Languages: en, fr, nl
+Canonical: https://adiungere.com/.well-known/security.txt
+Policy: https://github.com/LennyObez/adiungere/blob/main/SECURITY.md
