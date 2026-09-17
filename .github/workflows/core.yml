@@ -174,12 +174,21 @@ jobs:
           rustup show active-toolchain
           rustup target add x86_64-unknown-linux-musl
 
+      # The provenance library's cryptography carries a few C routines that are compiled for the target,
+      # which needs the C compiler of the C library being linked.
+      - name: Install the C compiler for the target
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools
+
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: core
 
       # Build only: a statically linked command line for hosts with no matching C library.
       - name: Build
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
         run: cargo build --workspace --target x86_64-unknown-linux-musl --exclude adiungere-guarantees
 
   wasm:
