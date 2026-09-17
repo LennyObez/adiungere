@@ -63,16 +63,29 @@ fn pinned(table: &str, key: &str) -> Option<String> {
 }
 
 /// The pinned media tool, from the fetched tools directory or the path, at the pinned version only.
+///
+/// The candidates come from listing the tools directory, never from a value read out of a file, so the
+/// only thing the versions file decides is which candidate is accepted: the one that reports the pinned
+/// version, whose location then has to be the one the versions file names.
 fn pinned_ffmpeg() -> Result<PathBuf, String> {
     let version = pinned("ffmpeg", "version").ok_or("tools/versions.toml pins no media tool")?;
     let binary = pinned("ffmpeg.linux-x86_64", "binary")
         .ok_or("tools/versions.toml names no binary for linux-x86_64")?;
-    let candidates = [
-        repository_root().join(".tools").join(&binary),
-        PathBuf::from("ffmpeg"),
-    ];
+    let tools = repository_root().join(".tools");
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&tools)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path().join("bin").join("ffmpeg"))
+                .collect()
+        })
+        .unwrap_or_default();
+    candidates.push(PathBuf::from("ffmpeg"));
 
     for candidate in candidates {
+        if candidate.starts_with(&tools) && candidate != tools.join(&binary) {
+            continue;
+        }
         let output = Command::new(&candidate).arg("-version").output();
         if let Ok(output) = output {
             let first = String::from_utf8_lossy(&output.stdout)
@@ -131,14 +144,20 @@ fn the_reference_script_reproduces_every_fingerprint_on_the_corpus() {
     for (name, path) in &recordings {
         let mut source = adiungere_isobmff::FileSource::open(path).unwrap();
         let container = parse(&mut source).unwrap();
-        for track in container.tracks().unwrap() {
+        // The script numbers tracks by their position under the movie box, which is what the reader's
+        // index is; the position counted here is what the script is given, and the two are checked equal.
+        for (position, track) in container.tracks().unwrap().into_iter().enumerate() {
+            assert_eq!(
+                track.index, position,
+                "{name}: the reader's track index is its position"
+            );
             let ours = track_fingerprint(&mut source, &container, &track).unwrap();
             let stream = (track.kind == TrackKind::Video)
                 .then(|| annex_b_digest(&mut source, &container, &track).unwrap());
 
             // Act
             let mut command = Command::new(&interpreter);
-            command.arg(&script).arg(path).arg(track.index.to_string());
+            command.arg(&script).arg(path).arg(position.to_string());
             if stream.is_some() {
                 command.arg("--annexb");
             }
@@ -148,25 +167,21 @@ fn the_reference_script_reproduces_every_fingerprint_on_the_corpus() {
             // Assert
             assert!(
                 output.status.success(),
-                "{name} track {}: {}",
-                track.index,
+                "{name} track {position}: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
             assert!(
                 printed.contains(&format!("payload {}", ours.payload_sha256)),
-                "{name} track {}: the script's payload digest differs:\n{printed}",
-                track.index
+                "{name} track {position}: the script's payload digest differs:\n{printed}"
             );
             assert!(
                 printed.contains(&format!("configuration {}", ours.configuration_sha256)),
-                "{name} track {}: the script's configuration digest differs:\n{printed}",
-                track.index
+                "{name} track {position}: the script's configuration digest differs:\n{printed}"
             );
             if let Some(stream) = stream {
                 assert!(
                     printed.contains(&format!("stream {}", stream.sha256)),
-                    "{name} track {}: the script's stream digest differs:\n{printed}",
-                    track.index
+                    "{name} track {position}: the script's stream digest differs:\n{printed}"
                 );
             }
             compared += 1;
@@ -248,7 +263,7 @@ fn the_versions_file_pins_the_tool_and_the_interpreter_exactly() {
     // Assert
     assert!(
         tool.starts_with('n') && tool.contains("-g"),
-        "the tool pin is not a build identifier: {tool}"
+        "the tool pin in tools/versions.toml is not a build identifier"
     );
     assert_eq!(
         interpreter.split('.').count(),

@@ -53,4 +53,5 @@ jobs:
         with:
           manifest-path: core/fuzz/Cargo.toml
           command: check
-          command-arguments: --config core/deny.toml
+          # One token: the action hands this input to the tool as a single argument.
+          command-arguments: --config=core/deny.toml
