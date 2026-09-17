@@ -5,7 +5,8 @@
 A native toolkit shell in Rust over a two-branch media pipeline, packaged in a sandbox that carries its own
 decoders. The core links directly, with no foreign function boundary.
 
-This is the one surface where hosting a browser engine was rejected on measurement rather than on taste.
+This is the one surface where hosting a browser engine was rejected on findings rather than on taste, and
+the findings are probes that have to hold before a line of shell code is written.
 Serving local files to the system webview is broken upstream, hardware video decoding is not installed by
 default on the two most common distributions, and the engine's acceleration policy cannot be reached from a
 host application. The native toolkit answers all three: its accessibility layer works, its media framework

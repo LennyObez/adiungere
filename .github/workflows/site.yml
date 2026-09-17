@@ -31,9 +31,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: The page loads nothing from another host, and the security contact is current
         run: ./scripts/check-site.sh
 
+      # Every script, discovered rather than listed, so a new one cannot arrive unchecked.
       - name: Shell scripts
-        run: shellcheck scripts/check-site.sh scripts/gate.sh
+        run: shellcheck scripts/*.sh

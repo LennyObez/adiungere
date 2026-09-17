@@ -1,0 +1,56 @@
+{
+  "what": "The numbers a full fingerprint of the reference recording produces. The recording itself is private: it carries satellite positions and a route, so it is fetched by the nightly pipeline from a location only the repository's secrets know, checked against the digest below, and never kept. Every number here was also reproduced by the reference script and by the pinned media tool, which is what probes P34 and P37 record.",
+  "size": 140083583,
+  "sha256": "02e433663ccf087100700cbf8a0054cd655e31d195599ae03ac1ffc04a418278",
+  "structural_sha256": "5590cbf677b48eb360bb5e50e4e29909c7ecbbdb1e65c10980968e71ec6f92db",
+  "tracks": [
+    {
+      "index": 0,
+      "coding": "avc1",
+      "sample_count": 1800,
+      "payload_sha256": "ec0e8d88642eba238383144c7c96bd0595782108c0c9fe08257becd6947a61ed",
+      "configuration_sha256": "9332b693ce522b96c6414dd975792a06d34d410ce20ee6cef6d66f19153410dd",
+      "stream_sha256": "6c2ab7086966364ed9326628a126241dc2040acfaf03d26ea148ee8cb674a891",
+      "stream_bytes": 74557736
+    },
+    {
+      "index": 1,
+      "coding": "avc1",
+      "sample_count": 1800,
+      "payload_sha256": "34d3c8046db99353a278e9c6a145ef8179dfa3d4dde7fcffcfd714e7eeca2d0f",
+      "configuration_sha256": "9332b693ce522b96c6414dd975792a06d34d410ce20ee6cef6d66f19153410dd",
+      "stream_sha256": "c67a472790d4b818247850ece29db681701702725499a8b33d86a47aac5ba14b",
+      "stream_bytes": 59567392
+    },
+    {
+      "index": 2,
+      "coding": "mp4a",
+      "sample_count": 2583,
+      "payload_sha256": "9bb6493c5a8ca0d1dcc4ab37058fcd5b988e0ab6414cf55dcfc013cca626dafd",
+      "configuration_sha256": "7a4fa7bae7593a73481fff5b3c819bff59a6471b15f2ace51581ebfd71234108",
+      "stream_sha256": null,
+      "stream_bytes": null
+    }
+  ],
+  "vendor": [
+    {
+      "location": "user_data",
+      "kind": "mamt",
+      "size": 30720,
+      "sha256": "4c5f16ebad86ec3fc687523d0598e337a3e10a4a7d2c0eae8cc0201ad83c6172"
+    },
+    {
+      "location": "user_data",
+      "kind": "\\xa9req",
+      "size": 36,
+      "sha256": "f968c2f405c632739b4fdf1d026359aff80d306a3702bc783ef4dcff9337746f"
+    },
+    {
+      "location": "top_level",
+      "kind": "ICAT",
+      "size": 12,
+      "sha256": "502d6297ae3effc9acee9065544f85dfd919979ff8d4ce5d68287c768edb850a"
+    }
+  ],
+  "structure_bytes_read_at_most": 262144
+}

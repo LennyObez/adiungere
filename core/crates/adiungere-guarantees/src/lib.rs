@@ -5,12 +5,20 @@
 //! was meant to catch. Both are answered here: the file list always comes from git, and every scanning
 //! guarantee carries a companion test proving the scan reached real files.
 //!
+//! A third way of being wrong was found and closed: a scan that silently drops a file it cannot decode. A
+//! document saved in the wrong encoding is invisible to an editor's eye and to every rule at once, so a
+//! tracked file that is not declared binary and does not decode as UTF-8 is refused rather than skipped.
+//!
 //! Git is asked through an argument vector, never through a shell. Nothing in this crate builds a command
 //! line out of a string.
 
+use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// Extensions that GitHub and this repository treat as Markdown.
+pub const MARKDOWN_EXTENSIONS: [&str; 5] = ["md", "markdown", "mdown", "mkd", "mdwn"];
 
 /// A tracked file and its contents, decoded as text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,17 +33,42 @@ impl TextFile {
     /// The file's extension, without the dot, in lower case.
     #[must_use]
     pub fn extension(&self) -> Option<String> {
-        Path::new(&self.path)
-            .extension()
-            .and_then(OsStr::to_str)
-            .map(str::to_lowercase)
+        extension_of(&self.path)
     }
 
-    /// Whether the file's path ends with this extension.
+    /// Whether the file's path ends with this extension, compared without regard to case.
     #[must_use]
     pub fn has_extension(&self, wanted: &str) -> bool {
-        self.extension().is_some_and(|found| found == wanted)
+        self.extension()
+            .is_some_and(|found| found == wanted.to_lowercase())
     }
+
+    /// Whether the file is Markdown under any of the spellings a renderer accepts.
+    #[must_use]
+    pub fn is_markdown(&self) -> bool {
+        is_markdown_path(&self.path)
+    }
+
+    /// The file's name without its directory.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.path.rsplit('/').next().unwrap_or(&self.path)
+    }
+}
+
+/// The extension of a path, without the dot, in lower case.
+#[must_use]
+pub fn extension_of(path: &str) -> Option<String> {
+    Path::new(path)
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(str::to_lowercase)
+}
+
+/// Whether a path is Markdown under any of the spellings a renderer accepts.
+#[must_use]
+pub fn is_markdown_path(path: &str) -> bool {
+    extension_of(path).is_some_and(|extension| MARKDOWN_EXTENSIONS.contains(&extension.as_str()))
 }
 
 /// Why the repository could not be read.
@@ -50,6 +83,18 @@ pub enum Error {
     },
     /// Git listed nothing, which means the scan that follows would prove nothing.
     NothingTracked,
+    /// A tracked file could not be read from disk.
+    Unreadable {
+        /// The path, relative to the repository root.
+        path: String,
+        /// What the operating system said.
+        cause: std::io::Error,
+    },
+    /// A tracked file is not declared binary and does not decode as UTF-8.
+    NotText {
+        /// The path, relative to the repository root.
+        path: String,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -66,6 +111,14 @@ impl std::fmt::Display for Error {
             },
             Self::NothingTracked => formatter.write_str(
                 "git listed no tracked file, so every scan below would report success by reading nothing",
+            ),
+            Self::Unreadable { path, cause } => {
+                write!(formatter, "{path} is tracked and cannot be read: {cause}")
+            },
+            Self::NotText { path } => write!(
+                formatter,
+                "{path} is not declared binary in .gitattributes and does not decode as UTF-8, so every \
+                 scan would skip it. Fix its encoding, or declare it binary."
             ),
         }
     }
@@ -120,27 +173,59 @@ pub fn tracked_paths() -> Result<Vec<String>, Error> {
     Ok(paths)
 }
 
-/// Every tracked file whose contents decode as UTF-8, with those contents.
+/// The extensions `.gitattributes` declares binary, in lower case and without the dot.
 ///
-/// Files that do not decode are skipped rather than reported: a byte sequence inside a compiled asset that
-/// happens to look like a forbidden pattern is noise, and every rule in this crate is about what a reader
-/// can read.
+/// Read from the file rather than written here, so the one place that says what is binary stays the one
+/// place. A file with one of these extensions is skipped by every text scan; a file with any other extension
+/// has to decode as UTF-8.
 ///
 /// # Errors
 ///
-/// Returns an error when the file list cannot be obtained, or when nothing readable was found.
+/// Returns an error when the attributes file cannot be read.
+pub fn binary_extensions() -> Result<BTreeSet<String>, Error> {
+    let source = read_at(".gitattributes").map_err(|cause| Error::Unreadable {
+        path: ".gitattributes".to_owned(),
+        cause,
+    })?;
+
+    Ok(source
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let pattern = parts.next()?;
+            let declares_binary = parts.any(|attribute| attribute == "binary");
+
+            (declares_binary && pattern.starts_with("*."))
+                .then(|| pattern.trim_start_matches("*.").to_lowercase())
+        })
+        .collect())
+}
+
+/// Every tracked file that is not declared binary, with its contents decoded as UTF-8.
+///
+/// # Errors
+///
+/// Returns an error when the file list cannot be obtained, when a file cannot be read, or when a file that
+/// is not declared binary does not decode. The last one is deliberate: the alternative is a scan that
+/// quietly reads less than the repository holds.
 pub fn tracked_text_files() -> Result<Vec<TextFile>, Error> {
     let root = repository_root();
+    let binary = binary_extensions()?;
     let mut files = Vec::new();
 
     for path in tracked_paths()? {
-        let full = root.join(&path);
-
-        if let Ok(contents) = std::fs::read(&full)
-            && let Ok(text) = String::from_utf8(contents)
-        {
-            files.push(TextFile { path, contents: text });
+        if extension_of(&path).is_some_and(|extension| binary.contains(&extension)) {
+            continue;
         }
+
+        let contents = std::fs::read(root.join(&path)).map_err(|cause| Error::Unreadable {
+            path: path.clone(),
+            cause,
+        })?;
+
+        let text = String::from_utf8(contents).map_err(|_| Error::NotText { path: path.clone() })?;
+
+        files.push(TextFile { path, contents: text });
     }
 
     if files.is_empty() {
@@ -150,7 +235,7 @@ pub fn tracked_text_files() -> Result<Vec<TextFile>, Error> {
     Ok(files)
 }
 
-/// Every tracked file under a directory, with its contents.
+/// Every tracked text file under a directory, with its contents.
 ///
 /// # Errors
 ///
@@ -183,13 +268,46 @@ pub fn read_at(relative: &str) -> Result<String, std::io::Error> {
     std::fs::read_to_string(repository_root().join(relative))
 }
 
+/// Returns the text with every line comment and every line that is only a comment removed, for
+/// configuration files that use `#`.
+///
+/// A rule about what a configuration declares must not be satisfied by a commented-out line that declares it,
+/// nor defeated by a comment that mentions the forbidden thing.
+#[must_use]
+pub fn without_hash_comments(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| {
+            let mut inside_quotes = false;
+            let mut kept = String::with_capacity(line.len());
+
+            for character in line.chars() {
+                if character == '"' {
+                    inside_quotes = !inside_quotes;
+                }
+
+                if character == '#' && !inside_quotes {
+                    break;
+                }
+
+                kept.push(character);
+            }
+
+            kept.trim_end().to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Returns Rust source with its comments, string literals and character literals removed.
 ///
 /// A guarantee that searches source for a construct has to search the code and not the prose about the code.
 /// Without this, the file explaining why there is no unsafe code anywhere would be the file reported for
 /// containing it, and the usual fix for that is to exempt the guarantee's own file, which ends the guarantee.
 ///
-/// Removed spans are replaced by a space so that token boundaries survive.
+/// Removed spans are replaced by a space so that token boundaries survive. The lexer knows exactly as much
+/// Rust as this needs: line and nested block comments, plain, raw and byte strings, character literals, and
+/// the one case that looks like a character literal and is not, a lifetime such as `'static`.
 #[must_use]
 pub fn rust_code_only(source: &str) -> String {
     let mut scanner = Scanner {
@@ -207,7 +325,7 @@ pub fn rust_code_only(source: &str) -> String {
 enum Span {
     Code,
     LineComment,
-    BlockComment,
+    BlockComment { depth: usize },
     Text { raw: bool, hashes: usize },
     Character,
 }
@@ -228,7 +346,7 @@ impl Scanner {
             span = match span {
                 Span::Code => self.in_code(),
                 Span::LineComment => self.in_line_comment(),
-                Span::BlockComment => self.in_block_comment(),
+                Span::BlockComment { depth } => self.in_block_comment(depth),
                 Span::Text { raw, hashes } => self.in_text(raw, hashes),
                 Span::Character => self.in_character(),
             };
@@ -252,31 +370,38 @@ impl Scanner {
         if current == '/' && next == Some('*') {
             self.index += 2;
             self.output.push(' ');
-            return Span::BlockComment;
+            return Span::BlockComment { depth: 1 };
         }
 
-        if current == 'r'
-            && matches!(next, Some('"' | '#'))
-            && let Some(hashes) = self.raw_text_opening()
+        // A byte string or raw byte string: `b"…"`, `br"…"`, `br#"…"#`. The prefix is code; the text is not.
+        if current == 'b'
+            && !self.preceded_by_identifier()
+            && let Some((prefix, hashes, raw)) = self.text_opening(1)
         {
-            self.index += 2 + hashes;
+            self.index += 1 + prefix;
             self.output.push(' ');
-            return Span::Text { raw: true, hashes };
+            return Span::Text { raw, hashes };
         }
 
-        if current == '"' {
-            self.index += 1;
+        if let Some((prefix, hashes, raw)) = self.text_opening(0)
+            && !(current == 'r' && self.preceded_by_identifier())
+        {
+            self.index += prefix;
             self.output.push(' ');
-            return Span::Text {
-                raw: false,
-                hashes: 0,
-            };
+            return Span::Text { raw, hashes };
         }
 
-        if current == '\'' && next.is_some_and(|following| following != ' ') {
+        if current == '\'' {
+            if self.opens_character_literal() {
+                self.index += 1;
+                self.output.push(' ');
+                return Span::Character;
+            }
+
+            // A lifetime or a label: `'static`, `'a`, `'outer:`. Code, kept as it is.
             self.index += 1;
-            self.output.push(' ');
-            return Span::Character;
+            self.output.push(current);
+            return Span::Code;
         }
 
         self.index += 1;
@@ -285,15 +410,51 @@ impl Scanner {
         Span::Code
     }
 
-    /// How many hashes open a raw text span starting at the current `r`, if one does.
-    fn raw_text_opening(&self) -> Option<usize> {
-        let mut hashes = 0;
+    /// Whether the character before the current one belongs to an identifier, in which case a `b` or `r`
+    /// here is the tail of a name rather than a prefix.
+    fn preceded_by_identifier(&self) -> bool {
+        self.index
+            .checked_sub(1)
+            .and_then(|before| self.characters.get(before))
+            .is_some_and(|previous| previous.is_alphanumeric() || *previous == '_')
+    }
 
-        while self.at(1 + hashes) == Some('#') {
-            hashes += 1;
+    /// If a plain or raw string opens at the current position plus `skip`, how many characters the opening
+    /// takes, how many hashes it carries, and whether it is raw.
+    fn text_opening(&self, skip: usize) -> Option<(usize, usize, bool)> {
+        match self.at(skip)? {
+            '"' => Some((skip + 1, 0, false)),
+            'r' => {
+                let mut hashes = 0;
+
+                while self.at(skip + 1 + hashes) == Some('#') {
+                    hashes += 1;
+                }
+
+                (self.at(skip + 1 + hashes) == Some('"')).then_some((skip + 2 + hashes, hashes, true))
+            },
+            _ => None,
         }
+    }
 
-        (self.at(1 + hashes) == Some('"')).then_some(hashes)
+    /// Whether the `'` at the current position opens a character literal rather than a lifetime.
+    ///
+    /// A character literal is `'x'`, `'\n'`, `'\u{2014}'`, `'\''`: one character or one escape, then a
+    /// closing quote. A lifetime is `'` followed by an identifier and no closing quote.
+    fn opens_character_literal(&self) -> bool {
+        match self.at(1) {
+            None => false,
+            Some('\\') => true,
+            Some(first) => {
+                if self.at(2) == Some('\'') {
+                    return true;
+                }
+
+                // `'ab'` is not valid Rust, so anything longer than one character before a quote is a
+                // lifetime or a label, never a literal.
+                !(first.is_alphanumeric() || first == '_')
+            },
+        }
     }
 
     fn in_line_comment(&mut self) -> Span {
@@ -308,15 +469,25 @@ impl Scanner {
         if ends { Span::Code } else { Span::LineComment }
     }
 
-    fn in_block_comment(&mut self) -> Span {
+    fn in_block_comment(&mut self, depth: usize) -> Span {
+        if self.at(0) == Some('/') && self.at(1) == Some('*') {
+            self.index += 2;
+            return Span::BlockComment { depth: depth + 1 };
+        }
+
         if self.at(0) == Some('*') && self.at(1) == Some('/') {
             self.index += 2;
-            return Span::Code;
+
+            return if depth <= 1 {
+                Span::Code
+            } else {
+                Span::BlockComment { depth: depth - 1 }
+            };
         }
 
         self.keep_newline_and_advance();
 
-        Span::BlockComment
+        Span::BlockComment { depth }
     }
 
     fn in_text(&mut self, raw: bool, hashes: usize) -> Span {
@@ -369,22 +540,175 @@ impl Scanner {
 /// Splits a document into its lines, marking the ones inside a fenced code block.
 ///
 /// Several guarantees are about prose and must not judge a code sample, so this is shared rather than
-/// written four times slightly differently.
+/// written four times slightly differently. It follows the same fence rules as the register and roadmap
+/// parsers: three or more backticks or tildes open a block, an info string after a backtick fence may not
+/// contain a backtick, and a block closes only on a fence of the same character at least as long.
 #[must_use]
 pub fn lines_with_fence_state(source: &str) -> Vec<(usize, &str, bool)> {
-    let mut inside = false;
+    let mut open: Option<(char, usize)> = None;
 
     source
         .lines()
         .enumerate()
         .map(|(index, line)| {
-            let is_fence = line.trim_start().starts_with("```");
+            let trimmed = line.trim_start();
+            let indent = line.len().saturating_sub(trimmed.len());
+            let marker = trimmed.chars().next().filter(|c| *c == '`' || *c == '~');
+            let run = marker.map_or(0, |c| trimmed.chars().take_while(|found| *found == c).count());
+            let rest = trimmed.get(run..).unwrap_or("");
 
-            if is_fence {
-                inside = !inside;
-            }
+            let inside = match (open, marker) {
+                (None, Some(character)) if indent <= 3 && run >= 3 => {
+                    let is_fence = character == '~' || !rest.contains('`');
 
-            (index + 1, line, inside || is_fence)
+                    if is_fence {
+                        open = Some((character, run));
+                    }
+
+                    is_fence
+                },
+                (None, _) => false,
+                (Some((character, length)), Some(found))
+                    if indent <= 3 && found == character && run >= length && rest.trim().is_empty() =>
+                {
+                    open = None;
+                    true
+                },
+                (Some(_), _) => true,
+            };
+
+            (index + 1, line, inside)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{lines_with_fence_state, rust_code_only, without_hash_comments};
+
+    fn tokens(source: &str) -> Vec<String> {
+        rust_code_only(source)
+            .split(|c: char| !c.is_alphanumeric() && c != '_')
+            .filter(|token| !token.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn comments_and_strings_are_dropped_and_code_is_kept() {
+        // Arrange
+        let source = "// unsafe here\nfn f() -> &str { \"unsafe\" } /* unsafe */ let x = 1;";
+
+        // Act
+        let found = tokens(source);
+
+        // Assert
+        assert_eq!(found, ["fn", "f", "str", "let", "x", "1"]);
+    }
+
+    #[test]
+    fn a_lifetime_is_code_and_not_the_start_of_a_character_literal() {
+        // Without this, `'static` swallowed everything up to the next quote, which in a real file was most
+        // of the file, and an unsafe block after it was invisible.
+
+        // Arrange
+        let source = "fn f<'a>(x: &'a str) -> &'static str { unsafe { g(x) } }";
+
+        // Act
+        let found = tokens(source);
+
+        // Assert
+        assert!(found.contains(&"unsafe".to_owned()), "got {found:?}");
+        assert!(found.contains(&"static".to_owned()), "got {found:?}");
+    }
+
+    #[test]
+    fn character_literals_are_dropped_including_the_awkward_ones() {
+        // Arrange
+        let source = "let a = ' '; let b = '\\''; let c = '\"'; let d = '\\u{2014}'; unsafe { }";
+
+        // Act
+        let found = tokens(source);
+
+        // Assert
+        assert_eq!(found, ["let", "a", "let", "b", "let", "c", "let", "d", "unsafe"]);
+    }
+
+    #[test]
+    fn raw_and_byte_strings_are_dropped() {
+        // Arrange
+        let source = "let a = r\"unsafe\"; let b = r#\"un\"safe\"#; let c = b\"unsafe\"; let d = br\"x\"; ok";
+
+        // Act
+        let found = tokens(source);
+
+        // Assert
+        assert_eq!(found, ["let", "a", "let", "b", "let", "c", "let", "d", "ok"]);
+    }
+
+    #[test]
+    fn block_comments_nest() {
+        // Arrange
+        let source = "/* a /* b */ unsafe */ fn f() {}";
+
+        // Act
+        let found = tokens(source);
+
+        // Assert
+        assert_eq!(found, ["fn", "f"]);
+    }
+
+    #[test]
+    fn an_identifier_ending_in_r_or_b_is_not_a_string_prefix() {
+        // Arrange
+        let source = "let bar\"x\"; let sub\"y\"; unsafe {}";
+
+        // Act
+        let found = tokens(source);
+
+        // Assert
+        assert_eq!(found, ["let", "bar", "let", "sub", "unsafe"]);
+    }
+
+    #[test]
+    fn newlines_survive_so_that_line_numbers_do() {
+        // Act
+        let output = rust_code_only("a // x\nb /* y\nz */ c \"s\ns\" d");
+
+        // Assert
+        assert_eq!(output.lines().count(), 4);
+    }
+
+    #[test]
+    fn hash_comments_are_removed_from_configuration_text() {
+        // Act
+        let cleaned = without_hash_comments("key = \"v#1\" # note\n# only = \"comment\"\nother = 2");
+
+        // Assert
+        assert_eq!(cleaned, "key = \"v#1\"\n\nother = 2");
+    }
+
+    #[test]
+    fn a_code_span_with_backticks_in_its_info_string_does_not_open_a_fence() {
+        // Act
+        let states: Vec<bool> = lines_with_fence_state("```adiungere probes``` reads it.\nnext")
+            .into_iter()
+            .map(|(_, _, inside)| inside)
+            .collect();
+
+        // Assert
+        assert_eq!(states, [false, false]);
+    }
+
+    #[test]
+    fn a_longer_fence_contains_a_shorter_one() {
+        // Act
+        let states: Vec<bool> = lines_with_fence_state("````\n```\nx\n```\n````\nout")
+            .into_iter()
+            .map(|(_, _, inside)| inside)
+            .collect();
+
+        // Assert
+        assert_eq!(states, [true, true, true, true, true, false]);
+    }
 }

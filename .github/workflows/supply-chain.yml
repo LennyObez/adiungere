@@ -1,0 +1,58 @@
+name: Supply chain
+
+# Advisories, licences, sources and bans over the resolved dependency graph.
+#
+# This runs on every change, and also on a schedule, because an advisory is published against a dependency
+# that has not changed. A repository nobody pushes to for a month would otherwise carry a known vulnerability
+# for a month without a red anywhere.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/Cargo.toml'
+      - 'core/Cargo.lock'
+      - 'core/deny.toml'
+      - 'core/crates/*/Cargo.toml'
+      - 'core/fuzz/Cargo.toml'
+      - 'core/fuzz/Cargo.lock'
+      - '.github/workflows/supply-chain.yml'
+  pull_request:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  policy:
+    name: Supply chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Advisories, licences, sources and bans
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: core/Cargo.toml
+          command: check
+
+      # The fuzzing project is its own package with its own lock file, outside the workspace: the same
+      # policy applies to it, or its engine's licence goes unchecked.
+      - name: The same policy over the fuzzing project
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: core/fuzz/Cargo.toml
+          # The policy path is an option of the tool itself, placed before the command, and one token:
+          # the action hands this input to the tool as a single argument.
+          arguments: --config=core/deny.toml
+          command: check

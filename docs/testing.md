@@ -60,12 +60,19 @@ success and teaches everyone to trust a green that means nothing.
 | Kind of check | Arrives |
 |---|---|
 | Golden tests per export mode | M2 |
-| Property tests over the synthetic corpus | M1 |
-| Independent parser and third-party digest oracles | M1, M2 |
-| Fuzzing of the box reader, the sample iterator and both parsers | M1 |
-| Mutation testing and undefined-behaviour checking | M1 |
+| Property tests over the synthetic corpus | M2 |
+| Third-party digest oracles: the reference script and the pinned media tool on every pull request, the browser and Apple readers in the oracles pipeline | **present** |
+| Independent parser oracle over an extraction's sample tables | M2 |
+| Fuzzing of the box reader, the sample tables, the fingerprints, the manifest reader and the naming grammars, nightly on a dated compiler, seeded from the corpus | **present** |
+| Mutation testing and undefined-behaviour checking, nightly | **present** |
+| Reproduction of every pinned number on the private reference recording, nightly | **present**, red until the recording's location is configured as a secret |
 | Byte-identical output across operating systems and WebAssembly | M2, M4 |
 | Browser tests on three engines with a network assertion | M4 |
+
+The synthetic corpus is built by `adiungere-fixtures` from three committed streams, and it is what every
+required check runs on: ten recordings that reproduce every structural property of the reference
+recording and change one at a time. The reference recording itself is private and reaches only the
+nightly pipeline.
 
 ## Guarantees expressed as tests
 
@@ -117,22 +124,26 @@ first red.
 | # | Step | Command today |
 |---|---|---|
 | 1 | Formatting | `cargo fmt --all --check` |
-| 2 | Lints, warnings refused | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
+| 2 | Lints | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | 3 | Unit tests | `cargo test --workspace --lib` |
 | 4 | Integration and guarantee tests | `cargo test --workspace --tests` |
 | 5 | Documentation tests | `cargo test --workspace --doc` |
-| 6 | The lock file matches the manifests | `cargo metadata --locked` |
-| 7 | Evidence register agrees with the roadmap | `cargo run -p adiungere-cli -- probes check` |
-| 8 | The published site loads nothing from another host, and its security contact is current | `scripts/check-site.sh` |
-| 9 | Shell scripts | `shellcheck` over `scripts/` |
-| 10 | Advisories, licences, sources and bans | `cargo deny check` |
-| 11 | Golden and property suites | M1, with the first fixture corpus |
-| 12 | Mutation testing, fuzzing, undefined-behaviour checking | M1, nightly |
-| 13 | Cross-platform and WebAssembly build matrix | M1 |
+| 6 | Documentation builds without a warning | `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --document-private-items` |
+| 7 | The lock file matches the manifests | `cargo metadata --locked --format-version 1` |
+| 8 | Evidence register agrees with the roadmap | `cargo run -p adiungere-cli -- probes check` |
+| 9 | The published site | `scripts/check-site.sh`: nothing loaded from another host, security contact current |
+| 10 | Shell scripts | `shellcheck scripts/*.sh` |
+| 11 | Advisories, licences, sources and bans | `cargo deny check` |
+| 12 | The same policy over the fuzzing project | `cargo deny --manifest-path core/fuzz/Cargo.toml --config core/deny.toml check` |
+| 13 | Golden and property suites | M2, with the first export writer, over the fixture corpus |
+| 14 | Mutation testing, fuzzing, undefined-behaviour checking | nightly pipeline, through scripts/nightly.sh |
+| 15 | Cross-platform and WebAssembly build matrix | pull-request pipeline, the four matrix jobs of the core workflow |
+| 16 | The browser and Apple readers agree with the fingerprint | oracles pipeline, through scripts/oracles.sh |
 
-A guarantee holds that this table and the script cannot drift apart: every step the script runs has to be
-described here, which is **G52**. A gate the documentation describes and the script does not run is a step
-nobody performs while everyone believes it happens.
+A guarantee holds that this table and the script cannot drift apart: the steps the script runs, in order,
+must be exactly the rows whose command column holds a command rather than a milestone, which is **G52**. A
+gate the documentation describes and the script does not run is a step nobody performs while everyone
+believes it happens.
 
 Continuous integration runs each step as its own step, never chained behind a single shell line, so a failure
 names itself.

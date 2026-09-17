@@ -18,11 +18,12 @@ targets, and the shared player has to exist for the website anyway. A browser en
 per element and never composites two, so a low-level decoder player is required regardless of which shell
 hosts it.
 
-**Linux** is where a hosted browser engine fails on three separate counts at once: an open upstream defect in
-serving local files to the system webview, no hardware-accelerated video decoder installed by default on the
-two most common distributions, and no way to reach the engine's acceleration policy from the host. The native
-toolkit, by contrast, has an accessibility layer that works, a media framework with a zero-copy sink, and a
-sandboxed package format that can carry its own decoders.
+**Linux** is where a hosted browser engine fails on three separate counts at once, as the planning research
+found and as probes **P09**, **P23** and **P24** confirm or overturn before a line of shell code is written:
+an open upstream defect in serving local files to the system webview, no hardware-accelerated video decoder
+installed by default on the two most common distributions, and no way to reach the engine's acceleration
+policy from the host. The native toolkit, by contrast, has an accessibility layer that works, a media
+framework with a zero-copy sink, and a sandboxed package format that can carry its own decoders.
 
 ## Decision drivers
 

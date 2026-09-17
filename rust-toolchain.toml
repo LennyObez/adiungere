@@ -4,10 +4,11 @@
 # the pipeline stays green on a compiler nobody develops against. Guarantee G07 refuses any workflow that
 # restates a version, so every job takes the pin from here.
 #
-# `llvm-tools` is listed because the release binary is inspected for symbols it must not contain, and the
-# tool that does it has to be the one shipped with the pinned compiler rather than whatever the host has.
+# The components are the ones a check uses today. A component nothing uses is a download every contributor
+# pays for a check that does not exist; when the release binary is inspected for encoder symbols at M2, the
+# tool that does it joins this list in the same change as the check.
 
 [toolchain]
 channel = "1.98.1"
-components = ["rustfmt", "clippy", "llvm-tools"]
+components = ["rustfmt", "clippy"]
 profile = "minimal"

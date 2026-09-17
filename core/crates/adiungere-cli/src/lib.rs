@@ -13,5 +13,7 @@
 //! to prevent.
 
 pub mod evidence;
+pub mod markdown;
+pub mod media;
 pub mod repository;
 pub mod roadmap;

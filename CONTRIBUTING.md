@@ -23,21 +23,26 @@ the interface says so ([ADR-0005](docs/adr/0005-the-product-never-returns-a-verd
 1. Branch from `main`: `feat/`, `fix/`, `perf/`, `refactor/`, `docs/`, `test/`, `chore/`, `security/`.
 2. Write the failing test first, and run it in the failing state.
 3. Implement the smallest change that makes it pass.
-4. Run the whole gate sequence with `scripts/gate.sh`: the whole sequence, not a scoped run.
+4. Run the whole gate sequence with `scripts/gate.sh`: the whole sequence, not a scoped run. The gate needs
+   the external oracles at their pinned versions; `scripts/fetch-tools.sh` places them under `.tools/`
+   once, checking each digest, and the gate refuses to run without them rather than skipping the steps
+   that use them.
 5. Open a pull request describing what changed and what proves it.
 
 ## Commits
 
-Conventional Commits, scoped by area:
+Conventional Commits, with a scope where the change belongs to one area:
 
 ```
 feat(isobmff): keep unknown user data boxes as ranges through a remux
 fix(scan): stop a paired rear file being listed as its own recording
 security(relay): refuse a claim body above the cap before reading it
+chore: lay the repository foundation
 ```
 
 Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`, `security`. Scopes: the area names in
-[`.github/labels.yml`](.github/labels.yml).
+[`.github/labels.yml`](.github/labels.yml). A pull request's title follows the same form, because it becomes
+the subject of the milestone commit, and a required check refuses a title that does not.
 
 **Every commit is signed.** If signing is unavailable, do not commit until it is. The default branch requires
 it, so there is no other route in.
@@ -53,8 +58,8 @@ Every tracked file is published. The following belong in local notes, which are 
 - A named past defect, or a count of what was broken.
 - The development environment: a machine, a personal path, a host, a control panel, an address.
 - A recording, or anything derived from one that carries a position or a face.
-- Anything that reads as denigrating the product, or a comparison that names a third-party product where a
-  generic description would do.
+- Anything that reads as denigrating the product, or a comparison that names a third-party product in this
+  product's category where a generic description would do.
 
 Write what the code **guarantees** and why the property matters. The reasoning survives; the incident does
 not belong in the repository. Guarantee **G05** enforces the mechanical part of this rule, and the review

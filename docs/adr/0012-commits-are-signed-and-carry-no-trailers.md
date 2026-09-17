@@ -28,10 +28,10 @@ default branch's ruleset requires signatures, so an unsigned commit cannot arriv
 **A milestone produces one commit** on the default branch. The pull requests that led to it remain the review
 record; the commit is the delivery. History stays readable at the scale a person actually reads it.
 
-**Commit messages carry no trailers.** The message is a Conventional Commits subject, scoped, and a body that
-states what is delivered and which check supports it. Authorship is established by the signature, which is
-verifiable, rather than by a line of text, which is not. No sign-off is required, because the licence settles
-what a trailer would assert.
+**Commit messages carry no trailers.** The message is a Conventional Commits subject, with a scope where one
+applies, and a body that states what is delivered and which check supports it. Authorship is established by
+the signature, which is verifiable, rather than by a line of text, which is not. No sign-off is required,
+because the licence settles what a trailer would assert.
 
 Branch names are short and typed: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`, `security`.
 
@@ -75,7 +75,15 @@ The default branch ruleset: signatures required, linear history, non fast-forwar
 a pull request with thread resolution, squash or rebase only, named required checks, and no bypass actor. A
 ruleset is enforced by the platform on every push, including the maintainer's.
 
-A pull request title check requires a Conventional Commits subject with a scope.
+A required check on every pull request refuses a title that is not a Conventional Commits subject: a type
+from the list above, an optional scope, a lower-case subject with no trailing full stop, within seventy-two
+characters. The title becomes the milestone commit's subject when the pull request is squashed.
+
+One consequence is stated rather than glossed over. The commits on a branch carry the maintainer's own
+signature. The squash that lands a milestone on the default branch is performed by the platform, and the
+commit it writes carries the platform's signature, which the ruleset accepts and a reader can verify against
+the platform's published key. The review trail from the branch's signed commits to that squash is the pull
+request, which is why pull requests are never deleted.
 
 ## What would change this decision
 

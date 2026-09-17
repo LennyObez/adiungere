@@ -25,8 +25,8 @@ between two surfaces is not an inconvenience; it is two answers to the same ques
 ## Decision
 
 One repository holds the Rust core, the shared player, the six surface projects, the website, the design
-tokens and the documentation. Each surface is a top-level directory with its own pipeline and its own path
-filter.
+tokens and the documentation. Everything that ships to a person lives in its own directory under `apps`,
+with its own pipeline and its own path filter; what the rest of the code consumes lives at the root beside it.
 
 ## Alternatives considered
 

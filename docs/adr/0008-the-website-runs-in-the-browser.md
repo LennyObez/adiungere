@@ -14,9 +14,10 @@ The recordings in question are evidence. They contain a route, satellite positio
 other people's vehicles and faces. Uploading them to anyone's server, including this project's, changes what
 the product is: it becomes a party that has held a copy of the evidence and can be asked what it did with it.
 
-Two things nonetheless cannot happen in a browser. A page cannot call a time-stamping authority, because those
-services do not answer cross-origin requests. And a signing key cannot live in a page, or in a downloadable
-binary, because either one is extractable by anyone who wants it.
+Two things nonetheless cannot happen in a browser. A page cannot call a time-stamping authority, because
+those services do not answer cross-origin requests, which probe **P25** measured against three of them. And
+a signing key cannot live in a page, or in a downloadable binary, because either one is extractable by
+anyone who wants it.
 
 ## Decision drivers
 

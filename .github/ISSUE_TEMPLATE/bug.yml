@@ -9,7 +9,7 @@ body:
 
         **Please do not attach a recording.** Dashcam footage carries satellite positions, a route, and other
         people's vehicles and faces. Everything below can be answered from the structure of the file rather
-        than from its content, and `adiungere inspect --json` prints exactly that.
+        than from its content, and `adiungere inspect --format json` prints exactly that.
 
   - type: dropdown
     id: surface
@@ -65,7 +65,7 @@ body:
     attributes:
       label: File structure, if a recording is involved
       description: >-
-        The output of `adiungere inspect --json`, or the camera make and model, the track layout and the
+        The output of `adiungere inspect --format json`, or the camera make and model, the track layout and the
         approximate size. Never the recording itself.
       render: json
     validations:

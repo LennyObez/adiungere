@@ -1,0 +1,81 @@
+# The fuzzing project. Its own package, outside the workspace, because it links a runtime the product does
+# not ship and builds on the dated nightly pinned in `tools/versions.toml` rather than on the product's
+# compiler. Nothing here is a dependency of anything that ships.
+
+[package]
+name = "adiungere-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+adiungere-fingerprint = { path = "../crates/adiungere-fingerprint" }
+adiungere-isobmff = { path = "../crates/adiungere-isobmff" }
+adiungere-manifest = { path = "../crates/adiungere-manifest" }
+adiungere-scan = { path = "../crates/adiungere-scan" }
+libfuzzer-sys = "=0.4.13"
+
+[[bin]]
+name = "box_reader"
+path = "fuzz_targets/box_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sample_tables"
+path = "fuzz_targets/sample_tables.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fingerprints"
+path = "fuzz_targets/fingerprints.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "manifest_reader"
+path = "fuzz_targets/manifest_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "naming_grammars"
+path = "fuzz_targets/naming_grammars.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1
+
+# The workspace lint table, restated because this package cannot inherit it. Guarantee G11 names this
+# manifest as restating the table and checks that every rule below is the workspace's.
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+missing_debug_implementations = "deny"
+unreachable_pub = "deny"
+unused_must_use = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+integer_division = "deny"
+dbg_macro = "deny"

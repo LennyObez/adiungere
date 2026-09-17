@@ -8,10 +8,14 @@ What you need, how to build it, and how to run every gate the pipeline runs.
 |---|---|---|
 | Rust, at the pinned version | The core, the command line and the guarantee suite | Installed automatically by `rustup` from `rust-toolchain.toml` |
 | `git` | The guarantee suite lists tracked files through it | Your package manager |
-| `cargo-deny` | Advisories, licences, sources and bans | `cargo install cargo-deny --locked` |
+| `cargo-deny` | Advisories, licences, sources and bans, at the version pinned in `tools/versions.toml`; the gate refuses another | `cargo install cargo-deny --locked --version <the pinned one>` |
+| `shellcheck` | The scripts under `scripts/` are checked like any other source | Your package manager |
+| `python3` on the pinned line | Runs the reference fingerprint script, which the guarantee suite compares with the product | Your package manager; the line is in `tools/versions.toml` |
+| The pinned media tool | Its elementary stream output is what the secondary digest is defined against | `scripts/fetch-tools.sh`, which places it under `.tools/` after checking its digest |
 
-Nothing else. There is no media framework to install, no system library to hunt down, and no external media
-tool needed to build or test what exists today.
+Nothing else. There is no media framework to install and no system library to hunt down; the media tool
+is a developer oracle, fetched once and never linked. The gate script refuses to run when one of these is
+missing, because a step that did not run is not a step that passed.
 
 The toolchain is pinned patch-exact in one file, at the repository root so that every invocation anywhere in
 the checkout resolves to it. Do not install it by hand and do not name a version on a command line: `rustup`
@@ -39,6 +43,22 @@ $ scripts/gate.sh
 It runs the sequence from [`testing.md`](testing.md) in order, writes each step's output to its own file
 under an ignored directory, reads each exit code before moving on, and stops at the first red. A scoped run
 answers a different question and its green is not the gate's green.
+
+## Inspect a recording
+
+```console
+$ cargo build --release -p adiungere-cli
+$ target/release/adiungere inspect clip.mp4
+$ target/release/adiungere fingerprint clip.mp4 --manifest clip.manifest.json
+$ target/release/adiungere verify clip.manifest.json clip.mp4
+$ target/release/adiungere report clip.manifest.json
+$ target/release/adiungere detect /media/card/ --cache ~/.cache/adiungere-scan.json
+```
+
+`inspect` reads the headers and the movie box and never the media, so it answers in milliseconds on any
+size of recording. `fingerprint` reads every byte. Every number either command prints is defined in
+[`integrity.md`](integrity.md) with the command a stranger runs to reproduce it. Add `--format json` to
+any of them for one document instead of prose.
 
 ## Read the evidence register
 

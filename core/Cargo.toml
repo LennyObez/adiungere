@@ -1,6 +1,17 @@
 [workspace]
 resolver = "3"
-members = ["crates/adiungere-cli", "crates/adiungere-guarantees"]
+members = [
+    "crates/adiungere-cli",
+    "crates/adiungere-fingerprint",
+    "crates/adiungere-fixtures",
+    "crates/adiungere-guarantees",
+    "crates/adiungere-isobmff",
+    "crates/adiungere-manifest",
+    "crates/adiungere-scan",
+]
+# The fuzzing project links a runtime the product does not ship and builds on a dated nightly; it is its
+# own package so that nothing in the workspace graph depends on it.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.0.0"
@@ -18,13 +29,16 @@ publish = false
 # which is unacceptable in a product whose central claim is that the same input produces the same bytes.
 [workspace.dependencies]
 clap = { version = "=4.6.6", features = ["derive"] }
+schemars = "=1.2.2"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
+sha2 = "=0.11.0"
 
 [workspace.lints.rust]
 # Forbid rather than deny: a crate cannot lift it locally. The two binding crates that will need unsafe code
-# arrive in M7 and M8, and each will opt out explicitly, at the site of use, with a written reason. Until
-# then there is no unsafe code anywhere and the guarantee says so.
+# arrive in M7 and M8; a forbid cannot be lifted, so each restates this table with unsafe code denied, justifies
+# every site of use, and is named in guarantee G11 as doing so. Until then there is no unsafe code anywhere
+# and the guarantee says so.
 unsafe_code = "forbid"
 missing_docs = "deny"
 missing_debug_implementations = "deny"

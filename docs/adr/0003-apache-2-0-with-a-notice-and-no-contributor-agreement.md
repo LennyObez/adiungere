@@ -59,8 +59,9 @@ purpose is public utility rather than revenue.
 ### Positive
 
 - Adoptable without a legal review in the organisations most likely to care about the output.
-- The dependency policy follows directly: an allow list of compatible permissive licences, with reciprocal
-  licences absent from it and therefore refused.
+- The dependency policy follows directly: an allow list of compatible licences, permissive or copyleft
+  limited to the file it covers, with anything whose terms reach the work as a whole absent from it and
+  therefore refused.
 - Nothing stands between a contributor and a first pull request.
 
 ### Negative
@@ -75,10 +76,12 @@ purpose is public utility rather than revenue.
 
 ## Enforcement
 
-Guarantee **G08**: the licence is declared as the same identifier in the licence file, the workspace manifest
-and the citation metadata; the licence text matches the canonical text; the notice file exists; and no
-reciprocal licence appears anywhere in the dependency closure. The last part is proved by adding a
-reciprocally licensed crate and watching the policy refuse it.
+Guarantee **G08**: the licence is declared as the same identifier in the licence file, the workspace and
+every crate manifest, and the citation metadata; the licence text matches its canonical publication to the
+byte; the notice file exists; and the dependency policy and the dependency review admit exactly the accepted
+set of licences, with no exception. Whether the resolved graph obeys the policy is the supply-chain step of
+the pipeline, run on every change and every night, and proved by adding a crate under refused terms and
+watching it go red.
 
 ## What would change this decision
 

@@ -1,0 +1,45 @@
+# The external tools the pipeline runs as oracles, pinned exactly.
+#
+# An oracle is a program this project did not write that must agree with it: the common media tool's
+# elementary stream output, the interpreter that runs the reference fingerprint script, the compiler
+# channel that runs the fuzzer. An unpinned oracle produces a false green or a false red, and both cost a
+# day. This file is the one place a version is written; the pipelines and the gate script read it, and a
+# guarantee refuses a pipeline that restates one of these versions in its own text.
+#
+# Every archive is verified against its digest before it is used, and nothing is installed system-wide:
+# `scripts/fetch-tools.sh` places what it fetches under `.tools/`, which is never tracked.
+
+[python]
+# The reference implementation in `scripts/track-fingerprint.py` uses the standard library only. The
+# pipeline installs this release line; the gate accepts the interpreter it finds when it is on this line.
+version = "3.12"
+
+[ffmpeg]
+# The build whose elementary stream output defines the secondary digest, `adiungere-annexb/1`. Probe P34
+# measured the same output from a build of February 2026 and from this one.
+version = "n9.0.1-30-g9258bacca5"
+
+[ffmpeg.linux-x86_64]
+url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-15-13-18/ffmpeg-n9.0.1-30-g9258bacca5-linux64-gpl-9.0.tar.xz"
+sha256 = "adb2d107287cdace0c5d00dd986cd3674c1e86776501640bff3b5cf7d2cf2e71"
+binary = "ffmpeg-n9.0.1-30-g9258bacca5-linux64-gpl-9.0/bin/ffmpeg"
+
+[rust-nightly]
+# The dated nightly the fuzzer and the undefined-behaviour checker use, because both need instrumentation
+# a release compiler does not offer. It is a tool of the nightly pipeline, not the compiler the product is
+# built with: that one is pinned in `rust-toolchain.toml` at the repository root and nowhere else, and the
+# mutation run uses it, since a mutant has to be judged by the compiler that builds the product.
+channel = "nightly-2026-09-01"
+
+[cargo-fuzz]
+# The driver that builds and runs the fuzz targets on the nightly above.
+version = "0.13.1"
+
+[cargo-mutants]
+# The driver that mutates the sources and runs the tests against each mutant.
+version = "27.0.0"
+
+[cargo-deny]
+# The checker of advisories, licences, sources and bans. The gate refuses another version, so that the
+# gate and the supply-chain pipeline, whose action bundles this version, read the policy the same way.
+version = "0.20.2"

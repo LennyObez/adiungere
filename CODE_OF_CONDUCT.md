@@ -34,8 +34,10 @@ represents the project.
 
 ## Reporting
 
-Report a problem privately to the maintainer through https://github.com/LennyObez. Reports are handled
-confidentially. Consequences range from a request to change behaviour, through temporary exclusion from a
-discussion, to a permanent ban, proportionate to what happened and whether it continued after being raised.
+Report a problem privately to the maintainer at conduct@adiungere.com. That address reaches one person and
+nobody else, and it is separate from the security contact so that a report about behaviour does not land in
+a tool built for vulnerabilities. Reports are handled confidentially. Consequences range from a request to
+change behaviour, through temporary exclusion from a discussion, to a permanent ban, proportionate to what
+happened and whether it continued after being raised.
 
 The maintainer is subject to this document on the same terms as everyone else.

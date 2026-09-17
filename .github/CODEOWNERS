@@ -1,12 +1,11 @@
-# Every path has an owner. Four paths are listed separately because a change to any of them changes what the
-# product promises rather than what it does: the guarantee suite, the format reader, the provenance pipeline
-# and the decision records.
+# Every path has an owner. The paths listed after the catch-all are the ones where a change alters what the
+# product promises rather than what it does: the guarantee suite, the decision records, the evidence
+# register, the pipelines and the deployment descriptions. The format reader and the provenance pipeline
+# join this list with the milestones that create them.
 
 *                                       @LennyObez
 
 /core/crates/adiungere-guarantees/      @LennyObez
-/core/crates/adiungere-isobmff/         @LennyObez
-/core/crates/adiungere-provenance/      @LennyObez
 /docs/adr/                              @LennyObez
 /docs/evidence.md                       @LennyObez
 /.github/workflows/                     @LennyObez

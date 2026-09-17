@@ -7,26 +7,31 @@
 //!
 //! Three kinds of line are exempt, because wrapping them would be wrong rather than tedious: a table row,
 //! anything inside a fenced code block, and a line whose width comes from a single unbreakable token such as
-//! a long URL.
+//! a long URL. Width is measured in characters, and the rule reaches every spelling of a Markdown extension.
 
-use adiungere_guarantees::{lines_with_fence_state, tracked_text_files};
+use adiungere_guarantees::{TextFile, lines_with_fence_state, tracked_text_files};
 
 const LIMIT: usize = 110;
 
 /// Whether a line is prose this guarantee judges.
 fn is_prose(line: &str) -> bool {
-    let trimmed = line.trim_start();
+    let trimmed = line.trim();
 
-    !trimmed.starts_with('|') && !trimmed.starts_with("<!--")
+    let is_table_row = trimmed.starts_with('|');
+    let is_whole_comment = trimmed.starts_with("<!--") && trimmed.ends_with("-->");
+
+    !is_table_row && !is_whole_comment
 }
 
 /// Whether a line could have been wrapped within the limit.
 ///
-/// A line is only a violation when there is somewhere to break it. A single long token, typically a URL, has
-/// no break point and is left alone.
+/// A line is only a violation when there is somewhere to break it before the limit. A single long token,
+/// typically a URL, has no break point and is left alone. Positions are counted in characters, because a
+/// column is a character and not a byte.
 fn could_have_been_wrapped(line: &str) -> bool {
-    line.char_indices()
-        .take_while(|(index, _)| *index < LIMIT)
+    line.chars()
+        .take(LIMIT)
+        .enumerate()
         .skip(1)
         .any(|(_, character)| character.is_whitespace())
 }
@@ -40,8 +45,7 @@ fn violations_in(path: &str, source: &str) -> Vec<String> {
         }
 
         // A carriage return is not a column. Without trimming it, a checkout that kept the other line ending
-        // would report every line as one character wider than it is, and the guarantee would fail on a
-        // working tree nobody had edited.
+        // would report every line as one character wider than it is.
         let line = raw.trim_end();
         let width = line.chars().count();
 
@@ -56,10 +60,10 @@ fn violations_in(path: &str, source: &str) -> Vec<String> {
 #[test]
 fn every_markdown_document_wraps_its_prose() {
     // Arrange
-    let documents: Vec<_> = tracked_text_files()
+    let documents: Vec<TextFile> = tracked_text_files()
         .unwrap()
         .into_iter()
-        .filter(|file| file.has_extension("md"))
+        .filter(TextFile::is_markdown)
         .collect();
 
     // Act
@@ -90,6 +94,53 @@ fn the_check_detects_a_long_paragraph() {
 }
 
 #[test]
+fn a_wide_line_of_multibyte_text_is_measured_in_characters() {
+    // Arrange
+    let accented = "é ".repeat(70);
+
+    // Act
+    let found = violations_in("sample.md", &accented);
+
+    // Assert
+    assert_eq!(
+        found.len(),
+        1,
+        "140 characters is wide whatever the byte count: {found:?}"
+    );
+}
+
+#[test]
+fn a_long_link_followed_by_prose_is_still_judged() {
+    // The exemption is for a token nobody can break, not for any line that starts with one.
+
+    // Arrange
+    let line = format!(
+        "[roadmap](https://example.test/{}) and then a sentence.",
+        "a/".repeat(60)
+    );
+
+    // Act
+    let found = violations_in("sample.md", &line);
+
+    // Assert
+    assert!(
+        found.is_empty(),
+        "No break point exists before the limit, so this is exempt: {found:?}"
+    );
+
+    let line = format!(
+        "A short lead, then [roadmap](https://example.test/{}).",
+        "a/".repeat(60)
+    );
+    let found = violations_in("sample.md", &line);
+    assert_eq!(
+        found.len(),
+        1,
+        "A break point exists before the limit, so this is judged: {found:?}"
+    );
+}
+
+#[test]
 fn a_table_row_is_not_judged() {
     // Tables are data. Wrapping a row would break the table.
 
@@ -104,52 +155,64 @@ fn a_table_row_is_not_judged() {
 }
 
 #[test]
-fn a_code_block_is_not_judged() {
+fn a_code_block_is_not_judged_and_a_code_span_is() {
     // Arrange
-    let block = format!("```console\n$ {}\n```\n", "x".repeat(200));
+    let block = format!("```console\n$ {}\n```\n", "x ".repeat(100));
+    let span = format!("```adiungere probes``` then {}", "word ".repeat(30));
 
     // Act
-    let found = violations_in("sample.md", &block);
-
-    // Assert
-    assert!(found.is_empty(), "A fenced block must not be judged: {found:?}");
-}
-
-#[test]
-fn an_unbreakable_token_is_not_judged() {
-    // A long URL has no break point. Demanding one would make the guarantee unsatisfiable.
-
-    // Arrange
-    let link = format!("https://example.test/{}", "segment/".repeat(30));
-
-    // Act
-    let found = violations_in("sample.md", &link);
+    let inside_block = violations_in("sample.md", &block);
+    let after_span = violations_in("sample.md", &span);
 
     // Assert
     assert!(
-        found.is_empty(),
-        "An unbreakable token must not be judged: {found:?}"
+        inside_block.is_empty(),
+        "A fenced block must not be judged: {inside_block:?}"
+    );
+    assert_eq!(
+        after_span.len(),
+        1,
+        "A code span is not a fence and the line is judged: {after_span:?}"
     );
 }
 
 #[test]
-fn the_scan_reads_real_documents() {
+fn a_whole_line_comment_is_exempt_and_a_partial_one_is_not() {
+    // Arrange
+    let whole = format!("<!-- {} -->", "note ".repeat(30));
+    let partial = format!("<!-- x --> {}", "word ".repeat(30));
+
+    // Act and assert
+    assert!(violations_in("sample.md", &whole).is_empty());
+    assert_eq!(violations_in("sample.md", &partial).len(), 1);
+}
+
+#[test]
+fn the_scan_reads_real_documents_under_every_spelling() {
     // Act
-    let documents: Vec<_> = tracked_text_files()
+    let documents: Vec<TextFile> = tracked_text_files()
         .unwrap()
         .into_iter()
-        .filter(|file| file.has_extension("md"))
+        .filter(TextFile::is_markdown)
         .collect();
     let lines: usize = documents.iter().map(|file| file.contents.lines().count()).sum();
 
     // Assert
     assert!(
-        documents.len() > 10,
+        documents.len() > 20,
         "Only {} documents were read; the check is too narrow.",
         documents.len()
     );
     assert!(
-        lines > 500,
+        lines > 1000,
         "Only {lines} lines were read; the check above is nearly inert."
+    );
+    assert!(
+        TextFile {
+            path: "x/README.markdown".to_owned(),
+            contents: String::new()
+        }
+        .is_markdown(),
+        "Every spelling a renderer accepts must be scanned."
     );
 }

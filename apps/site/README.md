@@ -35,7 +35,16 @@ sits above the document root, so neither the sources nor the version history is 
 When the site gains a build step at M4, a publish action appears alongside it. There is none today, because a
 script nothing runs is a script nobody maintains.
 
-Whether the host serves WebAssembly with the right media type, sets long cache lifetimes, and allows the
-response headers this project needs is an open question with a verdict due at M0: probe **P19** in
-[`../../docs/evidence.md`](../../docs/evidence.md). The answer also decides whether the signing service can
+## What the host has to honour
+
+Probe **P19** in [`../../docs/evidence.md`](../../docs/evidence.md) measured the deployment from the outside:
+the page is served from the pulled checkout, the repository above the document root is not reachable, and
+the response headers are the host's defaults. Two consequences follow for whoever administers the host.
+
+The security contact a visitor receives must be the tracked file in `public/.well-known/`, byte for byte. A
+host that generates its own contact at that path publishes a contact this project did not write, with an
+expiry this project does not track, and the gate's check of the tracked file then measures the wrong thing.
+
+Whether the host serves WebAssembly with the right media type and long cache lifetimes is probe **P38**,
+measured when the first module is published at M4. The answer also decides whether the signing service can
 run alongside the site later.

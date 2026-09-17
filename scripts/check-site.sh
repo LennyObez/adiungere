@@ -24,6 +24,16 @@ report() {
     failures=$((failures + 1))
 }
 
+# Seconds since the epoch for an RFC 3339 instant, on either family of `date`. The GNU form reads the whole
+# string; the BSD form wants an explicit pattern and no fractional seconds. Prints nothing if neither reads it.
+epoch_of() {
+    instant=$1
+    if date -u -d "$instant" +%s 2>/dev/null; then
+        return 0
+    fi
+    date -j -u -f '%Y-%m-%dT%H:%M:%S' "${instant%%.*}" +%s 2>/dev/null || printf ''
+}
+
 if [ ! -d "$published" ]; then
     printf 'check-site: %s does not exist.\n' "$published" >&2
     exit 1
@@ -58,7 +68,7 @@ else
     if [ -z "$expires" ]; then
         report 'check-site: the security contact carries no expiry, which the standard requires.'
     else
-        deadline=$(date -u -d "$expires" +%s 2>/dev/null || echo '')
+        deadline=$(epoch_of "$expires")
 
         if [ -z "$deadline" ]; then
             report "check-site: the security contact expiry \"$expires\" is not a date this can read."

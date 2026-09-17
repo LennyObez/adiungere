@@ -23,38 +23,36 @@ contiguous range.
 
 | Id | Guarantee | Enforces |
 |---|---|---|
-| G01 | No tracked file carries an em dash or an en dash. The characters are built from their code points, so the test does not contain what it forbids | [ADR-0012](adr/0012-commits-are-signed-and-carry-no-trailers.md) |
-| G02 | Every workflow step references an action by a 40-character commit, and keeps its version in a trailing comment | [`SECURITY.md`](../SECURITY.md) |
-| G03 | Every directory holding non-Markdown source is covered by a workflow path filter, with the directories discovered from git rather than from a list | [ADR-0001](adr/0001-a-single-repository.md) |
-| G04 | Every relative link in a tracked Markdown file resolves, and the decision index lists every record | [ADR-0011](adr/0011-documentation-is-rendered-from-the-repository.md) |
-| G05 | No tracked file carries an absolute path from a developer machine, a network address, or private key material | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
-| G06 | The repository root holds only the files it declares, and every declared file exists | [ADR-0001](adr/0001-a-single-repository.md) |
-| G07 | Exactly one toolchain pin exists, it is patch-exact, no pipeline restates a version, and the workspace minimum is satisfied by the pin | [`docs/getting-started.md`](getting-started.md) |
-| G08 | The licence identifier agrees across the licence file, the workspace manifest and the citation metadata; the licence text is unaltered; the notice file exists; and the dependency policy admits no reciprocal licence | [ADR-0003](adr/0003-apache-2-0-with-a-notice-and-no-contributor-agreement.md) |
-| G09 | Markdown prose wraps at 110 columns, with tables, code blocks and unbreakable tokens excepted | [ADR-0011](adr/0011-documentation-is-rendered-from-the-repository.md) |
-| G10 | A directory whose only tracked file is a README says which milestone fills it, and a directory that says so holds nothing else | [ADR-0001](adr/0001-a-single-repository.md) |
-| G11 | Unsafe code is forbidden workspace-wide and appears nowhere; the panicking constructs are denied outside tests; every crate inherits the workspace lints | [ADR-0002](adr/0002-one-rust-core-and-thin-shells.md) |
-| G20 | Every probe in the register names a milestone the roadmap has and is named by that milestone, and the roadmap mentions no probe the register does not hold | [`docs/evidence.md`](evidence.md) |
-| G52 | The ledger accounts for every identifier once, the enforced tables list exactly the guarantees the suite holds, the README's counts match, and the documented gate sequence is the one the script runs | this document |
+| G01 | No tracked file carries an em dash, an en dash, a look-alike, or the HTML entity a renderer turns into one. The characters are written as escapes, so the test does not contain what it forbids | [ADR-0012](adr/0012-commits-are-signed-and-carry-no-trailers.md) |
+| G02 | Every action a workflow or a composite action runs is referenced by a 40-character commit or an image digest, under every spelling of the key, and keeps a version in its trailing comment | [`SECURITY.md`](../SECURITY.md) |
+| G03 | Every directory that directly holds non-Markdown source is built by a workflow whose `paths` list names it, or an ancestor, with a glob; a sibling's glob does not count, an ignore list does not count, and the directories are discovered from git | [ADR-0001](adr/0001-a-single-repository.md) |
+| G04 | Every relative link in a tracked Markdown file, inline, reference-style or raw HTML, resolves inside the repository to a file that exists and, when it names an anchor, to a heading that exists; and the decision index links every record | [ADR-0011](adr/0011-documentation-is-rendered-from-the-repository.md) |
+| G05 | No tracked file carries an absolute path from a developer machine, a network address of either family, credential material, or a private key, in any prose form; and a tracked file not declared binary that does not decode as text refuses the whole scan rather than escaping it | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
+| G06 | The repository root holds only the files and directories it declares, each with a stated reason, and every declared entry is tracked | [ADR-0001](adr/0001-a-single-repository.md) |
+| G07 | Exactly one toolchain pin exists and it is patch-exact; the workspace minimum, the lint minimum and every crate agree with it; no pipeline restates, overrides or selects a compiler by any of the means the toolchain manager honours; no script writes a compiler version in its own text; and the dated nightly the fuzzer uses is pinned to the day in the tool versions file | [`docs/getting-started.md`](getting-started.md) |
+| G08 | The licence identifier agrees across the licence file, the workspace and every crate manifest, and the citation metadata; the licence text matches its canonical publication to the byte; the notice file exists; and the dependency policy and the dependency review admit exactly the accepted set, with no exception and no clarification | [ADR-0003](adr/0003-apache-2-0-with-a-notice-and-no-contributor-agreement.md) |
+| G09 | Markdown prose, under every spelling of the extension, wraps at 110 characters, with tables, fenced blocks, whole-line comments and unbreakable tokens excepted | [ADR-0011](adr/0011-documentation-is-rendered-from-the-repository.md) |
+| G10 | A directory whose only tracked file is a README, under any casing or Markdown extension, says which existing milestone fills it, and a directory that says so holds nothing else | [ADR-0001](adr/0001-a-single-repository.md) |
+| G11 | Unsafe code is forbidden workspace-wide and appears in no tracked Rust file, read as code rather than as prose about code; the panicking constructs are denied outside tests; every crate inherits the workspace lints or is named as restating them; and no source attribute switches any of these off | [ADR-0002](adr/0002-one-rust-core-and-thin-shells.md) |
+| G12 | Reading a recording and re-emitting its ranges reproduces the input byte for byte on every corpus recording, unknown boxes included and an unknown child inside a sample entry included: the ranges tile the file with no gap and no overlap | [ADR-0004](adr/0004-boxes-are-opaque-byte-ranges.md) |
+| G13 | No crate declares a typed user-data box, and a vendor child of the user-data box is recoverable byte for byte after reading and is recorded in the manifest by the digest of its own bytes | [ADR-0004](adr/0004-boxes-are-opaque-byte-ranges.md) |
+| G14 | The track fingerprint and the elementary stream digest equal what the reference script computes on every track of the corpus, and the elementary stream digest equals what the pinned media tool writes; a missing interpreter or tool is a failure, never a skip | [`docs/integrity.md`](integrity.md) |
+| G15 | A fuzz target exists for every parser and the nightly pipeline runs each one; the workspace denies every panicking construct outside tests; and a deterministic mutation pass over the corpus runs on every pull request | [ADR-0002](adr/0002-one-rust-core-and-thin-shells.md) |
+| G16 | No string in any wording catalogue, in any language found on disk, contains a word from that language's forbidden list, matched as a whole word without regard to case; every language carries the same keys as English | [ADR-0005](adr/0005-the-product-never-returns-a-verdict.md) |
+| G17 | The published schema closes the set of clocks a time can be read from and requires one on every time; every time a manifest carries has a clock and a note; every sentence about a time says "no later than" and names its clock | [ADR-0005](adr/0005-the-product-never-returns-a-verdict.md) |
+| G18 | One flipped byte in a sample is that track's finding and the whole file's and nothing else; one flipped byte in a vendor box, under user data or at the top level, is that box's finding and the whole file's and nothing else | [`docs/integrity.md`](integrity.md) |
+| G19 | Inspecting a recording's structure reads fewer than 256 kibibytes and never touches the media data box, measured through a counting source on every corpus recording, with the movie box first and last | [ADR-0004](adr/0004-boxes-are-opaque-byte-ranges.md) |
+| G20 | Every probe in the register names a milestone the roadmap has and is named in that milestone's own prose, and the roadmap mentions no probe the register does not hold; a register that has drifted in shape is refused rather than read partially | [`docs/evidence.md`](evidence.md) |
+| G52 | The ledger accounts for every identifier exactly once; the enforced tables list exactly the guarantees the suite holds and each of those holds a test; the README's counts of guarantees and probes and the changelog's count of decision records match the repository; and the gate sequence the documentation lists is the one the script runs, in both directions and in order | this document |
+| G54 | Nothing the ignore file refuses is tracked, under any casing, with the rules read from the ignore file itself; and no tracked file exceeds one mebibyte, because source is never that large and a recording or a build artefact is | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 
 Two of these arrived earlier than the plan scheduled them. **G20** came to M0 because the evidence register
-was worth reading as data from the first day. **G52** came to M0 because it caught a wrong number in the
-README on the day the README was written, which is exactly the failure it exists to prevent.
+was worth reading as data from the first day. **G52** came to M0 because a count in a document is wrong the
+moment nobody checks it, and the first day is when the counts are written. **G54** was not in the plan: the
+platform's push rules would refuse a recording or a key at the door for a repository under an organisation,
+and this repository is not one, so the suite holds the door instead.
 
 ## Committed, with the milestone that will enforce each
-
-### M1, inspection and fingerprints
-
-| Id | Guarantee |
-|---|---|
-| G12 | Parsing then reserialising without an edit reproduces the input byte for byte, including an unknown child inside a sample description entry |
-| G13 | No code path constructs a typed user-data structure, and an unknown user-data child survives every public entry point |
-| G14 | The production fingerprint equals the published reference script over the whole corpus, and the secondary digest equals the specified third-party recipe at a pinned tool version |
-| G15 | The parser never panics on arbitrary input, fuzzed nightly and smoke-fuzzed on every pull request |
-| G16 | No user-visible string in any catalogue found on disk asserts a verdict or uses internal jargon, matched as whole words in a verdict role, per language |
-| G17 | Every time value in a manifest carries a source from a closed set, and every sentence about time names its clock |
-| G18 | Verification runs against real files, and a single flipped byte in a sample or in the vendor box produces a mismatch and nothing else |
-| G19 | Inspecting a recording in header-only mode reads under 256 KiB and never touches the media payload |
 
 ### M2, lossless extraction
 
@@ -89,7 +87,7 @@ README on the day the README was written, which is exactly the failure it exists
 | G42 | The pixel-exact label is emitted only after every frame has been compared |
 | G43 | A composition carries the source telemetry bytes and the source fingerprints, and its digest differs from every source |
 
-### M5, desktop
+### M5, desktop, with G53 extended to each later surface
 
 | Id | Guarantee |
 |---|---|
@@ -98,13 +96,14 @@ README on the day the README was written, which is exactly the failure it exists
 | G39 | The desktop shells never write to a source, watched with a file monitor over a scripted session |
 | G40 | A stream-copy export from each shell produces fingerprints equal to the command line's |
 | G41 | The sandboxed package declares its codec extension and reports a clear unavailable state when it is masked |
+| G53 | An installed application makes no network request during scan, playback, export or verification, apart from the signing and time-stamping calls a person triggers, watched over a scripted session on each surface as it ships |
 
 ### M6, telemetry and masking
 
 | Id | Guarantee |
 |---|---|
 | G44 | The telemetry parser never fails an export; an unknown layout degrades to bytes preserved and the export carries the bytes |
-| G45 | A share action is reachable only after masking, or after an explicit acknowledgement |
+| G45 | A share action is reachable only after masking, or after an explicit acknowledgement that the file is unmasked; the choice is recorded in the manifest and never defaulted |
 
 ### M7, Android
 

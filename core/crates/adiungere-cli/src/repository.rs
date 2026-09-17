@@ -34,26 +34,27 @@ pub fn locate_root(start: &Path) -> Option<PathBuf> {
 mod tests {
     use super::{REGISTER, ROADMAP, locate_root};
     use std::fs;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn a_directory_holding_both_documents_is_the_root() {
         // Arrange
-        let temporary = temporary_directory("both-documents");
+        let temporary = Temporary::new("both-documents");
         fs::create_dir_all(temporary.join("docs")).unwrap();
         fs::write(temporary.join(REGISTER), "register").unwrap();
         fs::write(temporary.join(ROADMAP), "roadmap").unwrap();
 
         // Act
-        let found = locate_root(&temporary);
+        let found = locate_root(temporary.path());
 
         // Assert
-        assert_eq!(found.as_deref(), Some(temporary.as_path()));
+        assert_eq!(found.as_deref(), Some(temporary.path()));
     }
 
     #[test]
     fn the_search_climbs_out_of_a_subdirectory() {
         // Arrange
-        let temporary = temporary_directory("from-below");
+        let temporary = Temporary::new("from-below");
         let deep = temporary.join("core/crates/somewhere");
         fs::create_dir_all(&deep).unwrap();
         fs::create_dir_all(temporary.join("docs")).unwrap();
@@ -64,7 +65,7 @@ mod tests {
         let found = locate_root(&deep);
 
         // Assert
-        assert_eq!(found.as_deref(), Some(temporary.as_path()));
+        assert_eq!(found.as_deref(), Some(temporary.path()));
     }
 
     #[test]
@@ -73,28 +74,48 @@ mod tests {
         // absence as an empty register rather than as a missing repository.
 
         // Arrange
-        let temporary = temporary_directory("register-only");
+        let temporary = Temporary::new("register-only");
         fs::create_dir_all(temporary.join("docs")).unwrap();
         fs::write(temporary.join(REGISTER), "register").unwrap();
 
         // Act
-        let found = locate_root(&temporary);
+        let found = locate_root(temporary.path());
 
         // Assert
         assert_eq!(found, None);
     }
 
-    fn temporary_directory(name: &str) -> std::path::PathBuf {
-        let unique = format!(
-            "adiungere-{name}-{}-{:?}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_nanos())
-                .unwrap_or_default()
-        );
-        let path = std::env::temp_dir().join(unique);
-        fs::create_dir_all(&path).unwrap();
-        path
+    /// A directory that exists for one test and is removed when the test ends, whichever way it ends.
+    struct Temporary(PathBuf);
+
+    impl Temporary {
+        fn new(name: &str) -> Self {
+            let unique = format!(
+                "adiungere-{name}-{}-{:?}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|elapsed| elapsed.as_nanos())
+                    .unwrap_or_default()
+            );
+            let path = std::env::temp_dir().join(unique);
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+
+        fn join(&self, relative: &str) -> PathBuf {
+            self.0.join(relative)
+        }
+    }
+
+    impl Drop for Temporary {
+        fn drop(&mut self) {
+            // A directory that cannot be removed is not a failed test; it is left for the operating system.
+            let _ = fs::remove_dir_all(&self.0);
+        }
     }
 }

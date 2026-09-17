@@ -1,0 +1,83 @@
+name: Oracles
+
+# Probe P01: the readers the product will run beside on each platform must hand back every sample exactly
+# as stored, or the fingerprint computed on a phone will not equal the one computed by the command line.
+# Two readers are measured here, on the synthetic corpus: the browser-side demuxing library, on Linux, and
+# the platform's own reader, on macOS. Each reader's digests are compared with the product's manifest, and a
+# disagreement is a red job that names the track.
+#
+# This is not a required check. It answers a probe, and the register records the answer.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'tools/oracles/**'
+      - '.github/workflows/oracles.yml'
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'tools/oracles/**'
+      - '.github/workflows/oracles.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracles-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  browser:
+    name: Browser reader agrees
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the pinned toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: tools/oracles/.node-version
+
+      - name: Install the pinned reader
+        working-directory: tools/oracles
+        run: npm ci
+
+      - name: Compare the reader with the product on every corpus recording
+        run: scripts/oracles.sh browser "$RUNNER_TEMP/corpus"
+
+  platform:
+    name: Apple reader agrees
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the pinned toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      - name: Compare the reader with the product on every corpus recording
+        run: scripts/oracles.sh platform "$RUNNER_TEMP/corpus"
