@@ -122,15 +122,30 @@ the integrity assertion and a time stamp that an external validator accepts and 
 as an unknown signer, an original receives a sidecar manifest without one byte changing, and a faststart
 applied after signing is watched invalidating the hard binding.*
 
-- [ ] Provenance crate: parent ingredient, actions, integrity assertion, embedded and sidecar placement
-- [ ] Sign-last pipeline, automatic re-signing, and the invalidation test that proves the order matters
-- [ ] Time stamping against a development authority, with the production authority configurable
-- [ ] Split signing flow measured, self-signed chain labelled as not on the trust list, certificate
+- [x] Provenance crate: parent ingredient, actions, integrity assertion, embedded and sidecar placement
+- [x] Sign-last pipeline, automatic re-signing, and the invalidation test that proves the order matters
+- [x] Time stamping against a development authority, with the production authority configurable
+- [x] Split signing flow measured, self-signed chain labelled as not on the trust list, certificate
       enrolment opened as a long-lead issue
-- [ ] Verification extended to Content Credentials with an honest trust state, and the verification guide
-- [ ] Decision record stating what a relayed signature proves and what it does not
-- [ ] Probes P04, P05, P11 and P26 recorded, with the legal wording read in primary sources before any of it
+- [x] Verification extended to Content Credentials with an honest trust state, and the verification guide
+- [x] Decision record stating what a relayed signature proves and what it does not
+- [x] Probes P04, P05, P11 and P26 recorded, with the legal wording read in primary sources before any of it
       reaches the guide
+
+Every export can be signed last, with the credentials embedded and the hard binding over the final bytes;
+every recording can carry credentials beside it and stays byte for byte what it was; and a time-stamp
+token can be obtained over any file and checked on its own. The signing service of M4 will hold the key
+and sign the claim it audits, which P11 measured to be the shape the library offers. Until a certificate
+from a listed authority is enrolled, every signature is made with a credential generated for the run, and
+every surface says it is on no trust list; the pinned validator, which is not this product, reads each
+signed export as valid on that one condition. The demonstration of this milestone: an export signed by the
+command line validates under that tool, a recording with a sidecar validates under it unchanged, and a
+rewrite of the signed export is refused by it and by the product alike. The public check page of the
+standard's maintainers is the half a person performs, as P40 was, and P41 records it: drop the signed
+export there and read "unknown signer".
+
+- [ ] The signed export shown by the public check page as valid with an unknown signer, recorded as P41
+      with the date and what the page showed, because that part of the demonstration is outside any pipeline
 
 ## M4: Website and shared player, the first product
 

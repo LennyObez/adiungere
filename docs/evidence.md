@@ -151,21 +151,58 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
 
 ## P04 A sidecar signature leaves the asset untouched
 
-- **Verdict:** not started
+- **Verdict:** measured
 - **Milestone:** M3
 - **Question:** does producing an external provenance manifest for an original leave that original identical
   to the byte, and does an external validator accept the pair?
 - **Method:** digest before and after; validate with the external tool using its external-manifest option.
 - **Decides:** whether originals can carry provenance at all, since the product never rewrites an original.
+- **Result:** measured on 2026-09-17 with the provenance library at 0.90.22 and the validator at 0.27.22, on
+  every non-sparse recording of the synthetic corpus.
+
+  The library's builder, asked not to embed, returns the manifest store and writes the source's bytes to
+  the destination stream unchanged; the product does not use that stream at all and writes the store
+  beside the recording, under the recording's stem with the `c2pa` extension. Bytes and modification time
+  are compared before and after on each recording and are equal. The validator, given the recording, finds
+  the sidecar by that name without an option, and reports the state `Valid` with the single failure code
+  that says the signer's certificate is on no trust list; once one byte of the recording is changed it
+  reports `Invalid` with the hash mismatch. The validator refuses the sidecar given alone, as it should: a
+  manifest without its asset has nothing to bind to.
+
+  The manifest for a recording names the recording itself as its parent ingredient and records the action
+  `c2pa.opened`, which is what a validator of the current specification requires of a claim with no
+  creation to report; a claim with no action and a claim with an opening of nothing were both refused as
+  malformed. Guarantee G28 holds this on every pull request.
+
+  ```console
+  $ adiungere sign <recording>
+  $ c2patool <recording>
+  ```
 
 ## P05 Which identifier an embedded manifest is stored under
 
-- **Verdict:** not started
+- **Verdict:** measured
 - **Milestone:** M3
 - **Question:** which box identifier does the current provenance specification reserve for a manifest inside
   an ISO base media file, and which one does the library actually emit?
 - **Method:** read the specification annex; inspect a signed output.
 - **Decides:** the emission settings, and what the reader looks for.
+- **Result:** measured on 2026-09-17 by signing the reference-like recording's rear-only export and reading
+  the output with the product's own box reader.
+
+  The library emits one top-level `uuid` box whose sixteen-byte type is
+  `d8fec3d6-1b0e-483c-9297-5828877ec481`, placed after the file type box and before the movie box, which
+  is the identifier the specification reserves for a manifest store in this file format. The box holds
+  the whole store: 23 739 bytes for a manifest carrying one ingredient, three assertions and no
+  thumbnail. The hard binding assertion is the box hash of the current specification, with the `uuid`
+  box, the file type box and the movie header excluded and the media data hashed by content, which is
+  why any move of the movie box after signing is a mismatch (P04, G27). The product treats that box as the
+  manifest store it is, not as a recorder's box: an export of a signed file leaves it out and says so,
+  because a store copied into a rewritten container can only be invalid.
+
+  ```console
+  $ adiungere inspect <signed export> --format json | jq '.file.structure.top_level'
+  ```
 
 ## P06 What Safari does with two enabled video tracks
 
@@ -215,7 +252,7 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
 
 ## P11 The provenance library supports a split signing flow
 
-- **Verdict:** not started
+- **Verdict:** measured
 - **Milestone:** M3
 - **Question:** can the signing service rebuild a claim from structured facts and sign it without ever seeing
   the media, and what exactly must the client send?
@@ -223,6 +260,29 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   clip.
 - **Decides:** single key custody at the service, or timestamped manifests with no Content Credentials.
   This is the heaviest unknown in the plan: it has no degraded mode that keeps the advertised product.
+- **Result:** measured on 2026-09-17 with the provenance library at 0.90.22, on the reference-like
+  recording's rear-only export.
+
+  The split exists, and not in the shape the plan assumed. The library separates building from signing:
+  the builder runs where the media is and hands the signer one byte string, the claim's signature
+  structure, which names the assertions by their digests and carries none of the media. A signer that
+  records what it is handed was given 1 691 bytes for a 41 438 byte export, one signature was asked for,
+  and no sixty-four byte run of the export's media appears in those bytes. The manifest signed through it
+  reads back valid. So the service can hold the key, receive that structure with the assertion store
+  beside it, decode it, check every digest against the assertions it was shown, and sign; that is the
+  client's whole payload, a few kilobytes.
+
+  What the service cannot do is rebuild the claim and compare it byte for byte: two builds of the same
+  manifest differ, because the library salts each assertion and gives each manifest a fresh instance
+  identifier. Single key custody at the service therefore stands, with the mechanism refined in
+  [ADR-0015](adr/0015-what-a-relayed-signature-proves.md): the service signs the claim it audits, not one
+  it rebuilds, and its signature attests that these facts were presented to it, nothing about the media.
+  The fallback of time-stamped manifests without Content Credentials is not needed, and the standalone
+  time-stamp token exists anyway, as `adiungere timestamp`.
+
+  ```console
+  $ cargo test -p adiungere-provenance --test provenance a_delegate_signs
+  ```
 
 ## P12 Provenance validation inside the browser
 
@@ -444,12 +504,41 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
 
 ## P26 What the forensic and legal sources actually say
 
-- **Verdict:** not started
+- **Verdict:** measured
 - **Milestone:** M3
 - **Question:** is there a named judgment behind the claim that a court may not set aside dashcam video on
   suspicion alone, and what do the two forensic bodies say word for word about authentication conclusions?
 - **Method:** read the primary sources and quote them here.
 - **Decides:** every legal sentence on the website and in the report. Until it is answered, none is written.
+- **Result:** measured on 2026-09-17 by reading the two forensic documents in full from their publishers,
+  and by looking for the judgment.
+
+  The Scientific Working Group on Digital Evidence, *Best Practices for Digital Video Authentication*,
+  23-V-001, version 1.2, dated March 7, 2024, whose terms require that any quotation carry the version:
+  section 1 defines authentication as "the process of substantiating that the data is an accurate
+  representation of what it purports to be"; section 8 lists the possible results of an examination as
+  "Consistent with an original", "Inconsistent with an original" and "Inconclusive", and states that
+  "Language implying absolute certainty should be avoided unless discussing known alterations or
+  deletions"; section 5.3 states that "Metadata cannot be relied upon in isolation and should be used in
+  conjunction with other elements of the file when possible". Section 6.3 describes stream copying as the
+  preferred way to isolate a stream and stream hashing as the way to show a copy unchanged, which is what
+  this product's elementary stream digest is.
+
+  The European Network of Forensic Science Institutes, *Best Practice Manual for Digital Image
+  Authentication*, ENFSI-BPM-DI-03, issue 01, October 2021, approved by the ENFSI board on 18 October
+  2021: section 12.2 states that "The final conclusion of an authentication examination states the
+  evidential weight of (all) the findings as a level of support for one of the competing propositions",
+  reported as a likelihood ratio on a graded scale; section 3 defines a hash value as "commonly used as a
+  means for verification that the input data has not changed from the point in time that the hash was
+  first calculated". Both documents describe an examiner's work and an examiner's conclusion. This
+  product performs none of it, and its wording never says it does.
+
+  The judgment was not found. No primary source names a Belgian decision holding that a court may not set
+  aside dashcam video on suspicion alone, and a claim without a source is not written anywhere in this
+  repository; the sentence is retired. What the guide says about law is limited to what needs no case:
+  that admissibility and the standing of a time stamp depend on the jurisdiction, and that this product
+  does not say which one applies. The three quotations above are the only ones the verification guide
+  carries, each with its document, version and section.
 
 ## P27 Written licence opinion for the Linux media stack
 
@@ -616,6 +705,21 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
 
   ```console
   $ curl -sS https://crates.io/api/v1/crates/<crate> | jq '{max: .crate.max_stable_version, msrv: .versions[0].rust_version, licence: .versions[0].license}'
+  ```
+
+  Extended on 2026-09-17, when the provenance library entered the graph at 0.90.22, declaring 1.88 and
+  building under the pin. With its cryptography in Rust rather than a system library and only the small
+  synchronous HTTP client the time-stamp request needs, it resolves 327 crates, builds in under three
+  minutes on the pinned toolchain from a cold cache, and builds for the browser target with the
+  cryptography feature alone. Its graph carries one crate under a data licence the policy did not list,
+  the root certificate store's, now accepted; two advisories, an RSA timing side channel and an
+  unmaintained build-time macro, each ignored with the reason and the date written beside it, and RSA
+  signing refused by the product's own credential type while the first stands; and several crates on two
+  lines, which are its authors' to resolve and are excepted for its subtree only.
+
+  ```console
+  $ cargo tree --manifest-path core/Cargo.toml -e normal --prefix none | sort -u | wc -l
+  $ cargo deny --manifest-path core/Cargo.toml check
   ```
 
 ## P36 Whether the core builds everywhere it is promised
@@ -789,3 +893,19 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   $ adiungere export <recording> --camera rear --out rear.mp4
   $ adiungere export <recording> --camera front --out front.mp4
   ```
+
+## P41 The public check page reads a signed export as an unknown signer
+
+- **Verdict:** not started
+- **Milestone:** M3
+- **Question:** does the public check page of the standard's maintainers accept a signed export of the
+  reference recording, show its credentials as valid, and name the signer as unknown, which is what a
+  credential on no trust list must show?
+- **Method:** sign the rear-only export of the reference recording with `adiungere export <recording>
+  --camera rear --out rear.mp4 --sign`; open the public check page in a browser and drop `rear.mp4` on it;
+  record the date, what the page showed for the signature, the signer and the actions, and whether the
+  adiungere facts assertion is listed. The export carries the recorder's telemetry box, which holds
+  satellite positions: the page reads the file in the browser, and that is why this measurement is a
+  person's decision and not a pipeline's.
+- **Decides:** the half of this milestone's demonstration that no pipeline performs: that what the product
+  signs is read by the validator people will actually use, and read as exactly what it is.

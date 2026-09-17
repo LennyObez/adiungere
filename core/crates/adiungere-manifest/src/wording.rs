@@ -154,6 +154,8 @@ pub enum Phrase {
     ExportPreservedNone,
     /// An export left out track references to tracks it does not hold.
     ExportReferencesDropped,
+    /// An export left out the source's manifest store.
+    ExportCredentialsLeftOut,
     /// Where the export's manifest was written.
     ExportManifest,
     /// What an export shows of people and places, said after every export.
@@ -204,7 +206,7 @@ pub enum Phrase {
 
 impl Phrase {
     /// Every phrase, so that the catalogue can be checked against the code in both directions.
-    pub const ALL: [Self; 80] = [
+    pub const ALL: [Self; 81] = [
         Self::FactsOnly,
         Self::NotAnExamination,
         Self::MoovFirst,
@@ -262,6 +264,7 @@ impl Phrase {
         Self::ExportPreserved,
         Self::ExportPreservedNone,
         Self::ExportReferencesDropped,
+        Self::ExportCredentialsLeftOut,
         Self::ExportManifest,
         Self::ExportFaces,
         Self::SignEmbedded,
@@ -348,6 +351,7 @@ impl Phrase {
             Self::ExportPreserved => "export.preserved",
             Self::ExportPreservedNone => "export.preserved.none",
             Self::ExportReferencesDropped => "export.references.dropped",
+            Self::ExportCredentialsLeftOut => "export.credentials.left.out",
             Self::ExportManifest => "export.manifest",
             Self::ExportFaces => "export.faces",
             Self::SignEmbedded => "sign.embedded",

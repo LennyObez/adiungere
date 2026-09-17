@@ -41,7 +41,8 @@ impl Drop for Temporary {
     }
 }
 
-/// A remux of every track of a file, written beside it under another name.
+/// A remux of every track of a file, written beside it under another name, keeping the manifest store as
+/// a rewriter that does not know the standard would: the samples kept, the boxes moved, the store stale.
 fn remuxed(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = std::fs::read(from)?;
     let mut source = SliceSource::new(&bytes);
@@ -52,8 +53,12 @@ fn remuxed(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
         source: &mut source,
         tracks: all,
     }];
+    let plan = RemuxPlan {
+        keep_manifest_store: true,
+        ..RemuxPlan::default()
+    };
     let mut out = Vec::new();
-    remux(&mut inputs, &RemuxPlan::default(), &mut out, &mut |_| true)?;
+    remux(&mut inputs, &plan, &mut out, &mut |_| true)?;
     std::fs::write(to, out)?;
     Ok(())
 }

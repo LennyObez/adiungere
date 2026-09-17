@@ -85,6 +85,8 @@ fn export_in(directory: &Path, original: &[u8]) -> Result<(PathBuf, Manifest), B
     Ok((path, facts))
 }
 
+/// A rewrite that keeps every sample and the manifest store, and moves the boxes: what a rewriter that
+/// does not know the standard produces.
 fn rewrite(bytes: &[u8]) -> Result<Vec<u8>, adiungere_isobmff::Error> {
     let mut source = SliceSource::new(bytes);
     let container = parse(&mut source)?;
@@ -94,8 +96,12 @@ fn rewrite(bytes: &[u8]) -> Result<Vec<u8>, adiungere_isobmff::Error> {
         source: &mut source,
         tracks: all,
     }];
+    let plan = RemuxPlan {
+        keep_manifest_store: true,
+        ..RemuxPlan::default()
+    };
     let mut out = Vec::new();
-    remux(&mut inputs, &RemuxPlan::default(), &mut out, &mut |_| true)?;
+    remux(&mut inputs, &plan, &mut out, &mut |_| true)?;
     Ok(out)
 }
 

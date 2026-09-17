@@ -386,6 +386,7 @@ struct ExportReport {
     wide_offsets: bool,
     renumbered: bool,
     references_dropped: u32,
+    credentials_left_out: bool,
     tracks: Vec<ExportedTrack>,
     preserved: Vec<String>,
 }
@@ -501,6 +502,7 @@ pub fn export(
             wide_offsets: report.wide_offsets,
             renumbered: report.renumbered,
             references_dropped: report.references_dropped,
+            credentials_left_out: report.credentials_left_out,
             tracks: report
                 .tracks
                 .iter()
@@ -924,6 +926,9 @@ fn describe_export(exported: &Exported, sources: &[OpenSource]) -> String {
                 &[("count", &exported.report.references_dropped.to_string())]
             )
         );
+    }
+    if exported.report.credentials_left_out {
+        let _ = writeln!(text, "  {}", render(Phrase::ExportCredentialsLeftOut, &[]));
     }
     let _ = writeln!(
         text,

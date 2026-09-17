@@ -74,8 +74,12 @@ fn remuxed(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
         source: &mut source,
         tracks: all,
     }];
+    let plan = RemuxPlan {
+        keep_manifest_store: true,
+        ..RemuxPlan::default()
+    };
     let mut out = Vec::new();
-    remux(&mut inputs, &RemuxPlan::default(), &mut out, &mut |_| true)?;
+    remux(&mut inputs, &plan, &mut out, &mut |_| true)?;
     std::fs::write(to, out)?;
     Ok(())
 }

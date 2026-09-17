@@ -9,6 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
+use adiungere_fingerprint::Digest;
 use adiungere_fixtures::{build, corpus};
 use adiungere_guarantees::{pinned_validator, validator_verdict};
 use adiungere_manifest::{Manifest, Producer, Scope};
@@ -54,13 +55,13 @@ fn facts_of(path: &Path) -> Result<Manifest, Box<dyn std::error::Error>> {
     )?)
 }
 
-/// The bytes and the modification time of a file.
-fn state_of(path: &Path) -> (Vec<u8>, std::time::SystemTime) {
+/// The digest of a file's bytes and its modification time.
+fn state_of(path: &Path) -> (String, std::time::SystemTime) {
     let bytes = std::fs::read(path).unwrap_or_default();
     let modified = std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .unwrap_or(std::time::UNIX_EPOCH);
-    (bytes, modified)
+    (Digest::of(&bytes).to_string(), modified)
 }
 
 /// Writes a sidecar beside a recording and returns its path.

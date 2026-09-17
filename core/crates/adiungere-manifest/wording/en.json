@@ -58,6 +58,7 @@
     "export.preserved": "{count} box(es) carried across as bytes, not interpreted: {list}.",
     "export.preserved.none": "No recorder box was carried across, because the source holds none or the plan left them out.",
     "export.references.dropped": "{count} track reference(s) named a track this file does not hold and were left out, so nothing here refers to a track that is not here.",
+    "export.credentials.left.out": "The source carried Content Credentials, which are bound to the bytes of the file they were written into and would not hold in this one; they were left out. Sign this export to give it its own.",
     "export.manifest": "The manifest of this file is at {path}; it records the sources and their fingerprints.",
     "export.faces": "This export shows faces, number plates, and the time and position the recorder wrote into the picture. Sharing it publicly may be subject to data-protection rules; the originals stay on this device.",
     "sign.embedded": "{name}: Content Credentials embedded in the file, signed as {signer} ({algorithm}).",

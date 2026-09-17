@@ -27,6 +27,7 @@ its status says so.
 | [ADR-0012](0012-commits-are-signed-and-carry-no-trailers.md) | Commits are signed, and carry no trailers | Accepted |
 | [ADR-0013](0013-the-applications-do-not-check-for-updates.md) | The applications do not check for updates | Accepted |
 | [ADR-0014](0014-the-verification-surface-is-called-check.md) | The place is called Check, the action is called verify | Accepted |
+| [ADR-0015](0015-what-a-relayed-signature-proves.md) | What a relayed signature proves, and what it does not | Accepted |
 
 ## Decisions deliberately not recorded yet
 

@@ -683,17 +683,10 @@ fn verify_says_when_a_file_carries_no_credentials_and_reports_a_broken_binding()
     ])
     .unwrap();
     let signed_manifest = directory.path().join("rear.mp4.manifest.json");
-    // A rewrite of the signed file that keeps every sample and moves the boxes.
+    // A rewrite of the signed file by a rewriter that does not know the standard: every sample kept, the
+    // boxes moved, the store kept and therefore stale.
     let rewritten = directory.path().join("rewritten.mp4");
-    run(&[
-        "export",
-        signed_path.to_str().unwrap(),
-        "--camera",
-        "both",
-        "--out",
-        rewritten.to_str().unwrap(),
-    ])
-    .unwrap();
+    std::fs::write(&rewritten, rewritten_with_stale_store(&signed_path).unwrap()).unwrap();
     let clip_manifest = directory.path().join("clip.manifest.json");
     run(&[
         "fingerprint",
@@ -725,4 +718,67 @@ fn verify_says_when_a_file_carries_no_credentials_and_reports_a_broken_binding()
         "{}",
         out(&broken)
     );
+}
+
+/// A rewrite of a signed file that keeps every sample and the manifest store and moves the boxes.
+fn rewritten_with_stale_store(signed: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    use adiungere_isobmff::{Input, RemuxPlan, SliceSource, parse, remux};
+    let bytes = std::fs::read(signed)?;
+    let mut source = SliceSource::new(&bytes);
+    let container = parse(&mut source)?;
+    let all: Vec<usize> = (0..container.tracks()?.len()).collect();
+    let mut inputs = [Input {
+        container: &container,
+        source: &mut source,
+        tracks: all,
+    }];
+    let plan = RemuxPlan {
+        keep_manifest_store: true,
+        ..RemuxPlan::default()
+    };
+    let mut out = Vec::new();
+    remux(&mut inputs, &plan, &mut out, &mut |_| true)?;
+    Ok(out)
+}
+
+#[test]
+fn export_of_a_signed_file_leaves_the_stale_store_out_and_says_so() {
+    // Arrange
+    let directory = Temporary::new("export-signed-source");
+    let clip = write_reference_like(directory.path(), "20260604_122323E.MP4").unwrap();
+    let signed_path = directory.path().join("rear.mp4");
+    run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        signed_path.to_str().unwrap(),
+        "--sign",
+    ])
+    .unwrap();
+    let again = directory.path().join("again.mp4");
+
+    // Act
+    let exported = run(&[
+        "export",
+        signed_path.to_str().unwrap(),
+        "--camera",
+        "both",
+        "--out",
+        again.to_str().unwrap(),
+    ])
+    .unwrap();
+    let inspected = run(&["inspect", again.to_str().unwrap(), "--format", "json"]).unwrap();
+
+    // Assert
+    assert_eq!(exported.status.code(), Some(0), "{}", err(&exported));
+    assert!(
+        out(&exported).contains("The source carried Content Credentials"),
+        "{}",
+        out(&exported)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&inspected.stdout).unwrap();
+    let top_level = json["file"]["structure"]["top_level"].to_string();
+    assert!(!top_level.contains("uuid"), "{top_level}");
 }
