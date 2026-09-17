@@ -121,6 +121,31 @@
         "media_rate"
       ]
     },
+    "ExportClass": {
+      "description": "The four classes an export can belong to, permanent labels that every surface derives its wording\nfrom and nothing else.",
+      "oneOf": [
+        {
+          "description": "Coded samples of some tracks copied byte for byte into a rebuilt container.",
+          "type": "string",
+          "const": "extraction"
+        },
+        {
+          "description": "Every camera as its own video track plus the audio, in one rebuilt container, with no encoder.",
+          "type": "string",
+          "const": "two_track_archive"
+        },
+        {
+          "description": "Composed and re-encoded; the default composition.",
+          "type": "string",
+          "const": "rendition_lossy"
+        },
+        {
+          "description": "Composed and re-encoded without loss, a label granted only after every frame was decoded and\ncompared with its source.",
+          "type": "string",
+          "const": "rendition_lossless_verified"
+        }
+      ]
+    },
     "FileRecord": {
       "description": "The file that was seen.",
       "type": "object",
@@ -158,6 +183,26 @@
         "structure"
       ]
     },
+    "Masking": {
+      "description": "What an export did to the people, the plates and the burned-in strip in the picture.",
+      "oneOf": [
+        {
+          "description": "Nothing was masked: the file is for a claim or a court, and the recipient needs every detail.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Faces and number plates were masked, in a re-encoded rendition.",
+          "type": "string",
+          "const": "faces_and_plates"
+        },
+        {
+          "description": "Faces, number plates and the strip the recorder burns into the picture were masked.",
+          "type": "string",
+          "const": "faces_plates_and_strip"
+        }
+      ]
+    },
     "Operation": {
       "description": "What a manifest records having been done.",
       "oneOf": [
@@ -177,6 +222,37 @@
           "required": [
             "kind",
             "scope"
+          ]
+        },
+        {
+          "description": "The file this manifest describes was written from the sources listed, by the core.",
+          "type": "object",
+          "properties": {
+            "class": {
+              "description": "The class of the export, which is what every integrity sentence about it derives from.",
+              "$ref": "#/$defs/ExportClass"
+            },
+            "kind": {
+              "type": "string",
+              "const": "export"
+            },
+            "masking": {
+              "description": "What was done to faces, plates and the burned-in strip, chosen explicitly and never defaulted.",
+              "$ref": "#/$defs/Masking"
+            },
+            "sources": {
+              "description": "The recordings the output was made from, with the fingerprints of the tracks taken from each.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceRecord"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "class",
+            "masking",
+            "sources"
           ]
         }
       ]
@@ -234,6 +310,80 @@
       "description": "A SHA-256 digest as sixty-four lower-case hexadecimal characters.",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "SourceRecord": {
+      "description": "One recording an export was made from.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The file name, without its directory.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "The digest of the whole source, when it was read in full.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "size": {
+          "description": "The size in bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "tracks": {
+          "description": "The tracks taken from this source, each with the fingerprint it had there.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceTrack"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "size",
+        "tracks"
+      ]
+    },
+    "SourceTrack": {
+      "description": "One track taken from a source.",
+      "type": "object",
+      "properties": {
+        "fingerprint": {
+          "description": "The track's fingerprint in the source, which an extraction preserves and a rendition does not.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrackFingerprint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "index": {
+          "description": "The track's index under the source's movie box.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "output_index": {
+          "description": "The track's index under the output's movie box.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "output_index"
+      ]
     },
     "StructuralFingerprint": {
       "description": "The observations and their digest.",

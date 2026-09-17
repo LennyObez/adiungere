@@ -121,33 +121,20 @@ impl Source for SliceSource<'_> {
     }
 
     fn read_at(&mut self, offset: u64, into: &mut [u8]) -> Result<(), SourceError> {
+        // The slice itself decides whether the range exists: a start past the end, or an end past the
+        // end, is the same refusal, with the same numbers in it.
         let length = into.len() as u64;
-        let end = offset.checked_add(length);
         let available = self.bytes.len() as u64;
-
-        match end {
-            Some(end) if end <= available => {
-                let start = usize::try_from(offset).map_err(|_| SourceError::OutOfBounds {
-                    offset,
-                    length,
-                    available,
-                })?;
-                let slice = self.bytes.get(start..start.saturating_add(into.len())).ok_or(
-                    SourceError::OutOfBounds {
-                        offset,
-                        length,
-                        available,
-                    },
-                )?;
-                into.copy_from_slice(slice);
-                Ok(())
-            },
-            _ => Err(SourceError::OutOfBounds {
-                offset,
-                length,
-                available,
-            }),
-        }
+        let out_of_bounds = || SourceError::OutOfBounds {
+            offset,
+            length,
+            available,
+        };
+        let start = usize::try_from(offset).map_err(|_| out_of_bounds())?;
+        let stop = start.checked_add(into.len()).ok_or_else(out_of_bounds)?;
+        let slice = self.bytes.get(start..stop).ok_or_else(out_of_bounds)?;
+        into.copy_from_slice(slice);
+        Ok(())
     }
 }
 

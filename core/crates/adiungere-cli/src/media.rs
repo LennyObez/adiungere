@@ -6,12 +6,15 @@
 //! be read; neither is a judgement about a recording, both are facts about bytes.
 
 use std::fmt::Write as _;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use adiungere_isobmff::FileSource;
 use adiungere_manifest::wording::{Phrase, render};
 use adiungere_manifest::{
-    Manifest, Outcome, Producer, Scope, Subject, TrackKind, VendorBox, VendorLocation, Verification,
+    ExportClass, Manifest, Masking, Operation, Outcome, Producer, Scope, SourceRecord, SourceTrack, Subject,
+    TrackFingerprint, TrackKind, VendorBox, VendorLocation, Verification,
 };
 use adiungere_scan::{Recording, Scan, ScanCache, Signal, parse_name, scan};
 
@@ -60,6 +63,35 @@ pub enum MediaFailure {
         /// What went wrong.
         cause: serde_json::Error,
     },
+    /// A recording does not hold what the selection asks for.
+    Selection {
+        /// The path.
+        path: PathBuf,
+        /// What is missing.
+        reason: String,
+    },
+    /// The export could not be written, or was stopped.
+    Export {
+        /// The path of the output.
+        path: PathBuf,
+        /// What went wrong.
+        cause: adiungere_isobmff::Error,
+    },
+    /// A path the export would write is a recording it reads.
+    Overwrite {
+        /// The path that would be written.
+        path: PathBuf,
+        /// The source it names.
+        source: PathBuf,
+    },
+    /// The output, read back, does not carry the fingerprints of its sources, which the writer cannot
+    /// cause and a person must know about.
+    Mismatch {
+        /// The path of the output.
+        path: PathBuf,
+        /// The track, by index in the output.
+        track: usize,
+    },
 }
 
 impl std::fmt::Display for MediaFailure {
@@ -76,6 +108,20 @@ impl std::fmt::Display for MediaFailure {
             },
             Self::Write { path, cause } => write!(formatter, "cannot write {}: {cause}", path.display()),
             Self::Serialisation { cause } => write!(formatter, "cannot write the answer: {cause}"),
+            Self::Selection { path, reason } => write!(formatter, "{}: {reason}", path.display()),
+            Self::Export { path, cause } => write!(formatter, "{}: {cause}", path.display()),
+            Self::Overwrite { path, source } => write!(
+                formatter,
+                "{} is the recording {} being exported; nothing was written",
+                path.display(),
+                source.display()
+            ),
+            Self::Mismatch { path, track } => write!(
+                formatter,
+                "{}: track {track} read back with a fingerprint that is not its source's; the output was \
+                 removed",
+                path.display()
+            ),
         }
     }
 }
@@ -251,6 +297,575 @@ pub fn report(manifest_path: &Path, output: Output) -> Result<Rendered, MediaFai
         text,
         negative: false,
     })
+}
+
+/// Which tracks an export keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Selection {
+    /// The first video track and every audio track.
+    Front,
+    /// The second video track and every audio track.
+    Rear,
+    /// Every track.
+    Both,
+    /// Exactly these tracks of the first file, by index.
+    Tracks(Vec<usize>),
+}
+
+/// What `export` writes besides the file: the report of the remux and the manifest of the output.
+#[derive(Debug, serde::Serialize)]
+struct Exported {
+    /// Where the output was written.
+    output: PathBuf,
+    /// Where its manifest was written.
+    manifest_path: PathBuf,
+    /// What the remux did.
+    report: ExportReport,
+    /// The manifest of the output.
+    manifest: Manifest,
+}
+
+/// The remux report in the shape the answer carries.
+#[derive(Debug, serde::Serialize)]
+struct ExportReport {
+    bytes_written: u64,
+    chunks: u32,
+    wide_offsets: bool,
+    renumbered: bool,
+    references_dropped: u32,
+    tracks: Vec<ExportedTrack>,
+    preserved: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ExportedTrack {
+    input: usize,
+    source_index: usize,
+    output_index: usize,
+    track_id: u32,
+    source_track_id: u32,
+    samples: u32,
+    bytes: u64,
+}
+
+/// One source of an export, read in full before the output is written.
+struct OpenSource {
+    path: PathBuf,
+    source: FileSource,
+    container: adiungere_isobmff::Container,
+    manifest: Manifest,
+    tracks: Vec<usize>,
+}
+
+/// Writes one camera, both, or the chosen tracks of a recording into a new file without touching a
+/// sample, and the manifest of the output beside it.
+///
+/// # Errors
+///
+/// Returns a failure when a source cannot be read, when the selection names tracks the source does not
+/// have, when the output or its manifest cannot be written, or when the output read back does not carry
+/// its sources' fingerprints.
+pub fn export(
+    files: &[PathBuf],
+    selection: &Selection,
+    out: &Path,
+    manifest_to: Option<&Path>,
+    output: Output,
+    stop: &AtomicBool,
+) -> Result<Rendered, MediaFailure> {
+    // The output is written under a temporary name and moved into place once it is complete and read
+    // back, so a stopped or failed export never leaves a file that looks finished.
+    let partial = out.with_extension("part");
+    let manifest_path = manifest_to.map_or_else(|| manifest_beside(out), Path::to_path_buf);
+
+    // Nothing this command writes may be a recording it reads, under any spelling of the path: the
+    // check runs before a byte is written, and refuses the export rather than the source.
+    for written in [out, &partial, &manifest_path] {
+        if let Some(source) = files.iter().find(|file| same_file(file, written)) {
+            return Err(MediaFailure::Overwrite {
+                path: written.to_path_buf(),
+                source: source.clone(),
+            });
+        }
+    }
+
+    let mut sources = open_sources(files, selection, out)?;
+    let class = class_of(&sources);
+    let report = write_output(&mut sources, &partial, output, stop)?;
+    let manifest = read_back(&partial, out, class, source_records(&sources, &report))?;
+    if let Some(track) = track_not_carrying_its_source(&manifest) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(MediaFailure::Mismatch {
+            path: out.to_path_buf(),
+            track,
+        });
+    }
+    std::fs::rename(&partial, out).map_err(|cause| MediaFailure::Write {
+        path: out.to_path_buf(),
+        cause,
+    })?;
+
+    let canonical = manifest
+        .to_canonical_json()
+        .map_err(|cause| MediaFailure::Serialisation { cause })?;
+    std::fs::write(&manifest_path, &canonical).map_err(|cause| MediaFailure::Write {
+        path: manifest_path.clone(),
+        cause,
+    })?;
+
+    let exported = Exported {
+        output: out.to_path_buf(),
+        manifest_path,
+        report: ExportReport {
+            bytes_written: report.bytes_written,
+            chunks: report.chunks,
+            wide_offsets: report.wide_offsets,
+            renumbered: report.renumbered,
+            references_dropped: report.references_dropped,
+            tracks: report
+                .tracks
+                .iter()
+                .map(|track| ExportedTrack {
+                    input: track.input,
+                    source_index: track.source_index,
+                    output_index: track.output_index,
+                    track_id: track.track_id,
+                    source_track_id: track.source_track_id,
+                    samples: track.samples,
+                    bytes: track.bytes,
+                })
+                .collect(),
+            preserved: report
+                .preserved
+                .iter()
+                .map(|preserved| preserved.kind.to_string())
+                .collect(),
+        },
+        manifest,
+    };
+    let text = match output {
+        Output::Json => json(&exported)?,
+        Output::Text => describe_export(&exported, &sources),
+    };
+    Ok(Rendered {
+        text,
+        negative: false,
+    })
+}
+
+/// Opens one or two recordings and settles which tracks each contributes.
+fn open_sources(
+    files: &[PathBuf],
+    selection: &Selection,
+    out: &Path,
+) -> Result<Vec<OpenSource>, MediaFailure> {
+    let (first, second) = match files {
+        [first] => (first, None),
+        [first, second] => (first, Some(second)),
+        _ => {
+            return Err(MediaFailure::Selection {
+                path: out.to_path_buf(),
+                reason: "one or two recordings are exported at a time".to_owned(),
+            });
+        },
+    };
+    let mut sources = Vec::new();
+    let mut primary = open_source(first)?;
+    // In a join, the first file gives its front camera and its audio, the second its front camera as the
+    // rear; a recorder that writes one file per camera writes the audio into both.
+    primary.tracks = match second {
+        Some(_) => choose(&primary, &Selection::Front)?,
+        None => choose(&primary, selection)?,
+    };
+    sources.push(primary);
+    if let Some(path) = second {
+        if *selection != Selection::Both {
+            return Err(MediaFailure::Selection {
+                path: path.clone(),
+                reason: "two recordings join into one two-track file, which keeps both cameras".to_owned(),
+            });
+        }
+        let mut rear = open_source(path)?;
+        rear.tracks = second_video_track(&rear)?;
+        sources.push(rear);
+    }
+    Ok(sources)
+}
+
+/// The class an export belongs to: an archive when it carries more than one video track, an extraction
+/// otherwise. The label derives from what is written and from nothing else.
+fn class_of(sources: &[OpenSource]) -> ExportClass {
+    let videos = sources
+        .iter()
+        .flat_map(|source| {
+            source
+                .tracks
+                .iter()
+                .filter_map(|&index| source.manifest.tracks.get(index))
+        })
+        .filter(|record| record.kind == TrackKind::Video)
+        .count();
+    if videos > 1 {
+        ExportClass::TwoTrackArchive
+    } else {
+        ExportClass::Extraction
+    }
+}
+
+/// The sources as the output's manifest records them: name, size, digest, and the fingerprint of every
+/// track taken, with where it landed.
+fn source_records(sources: &[OpenSource], report: &adiungere_isobmff::RemuxReport) -> Vec<SourceRecord> {
+    sources
+        .iter()
+        .enumerate()
+        .map(|(position, source)| SourceRecord {
+            name: file_name(&source.path),
+            size: source.manifest.file.size,
+            sha256: source.manifest.file.sha256,
+            tracks: source
+                .tracks
+                .iter()
+                .map(|&index| SourceTrack {
+                    index,
+                    output_index: report
+                        .tracks
+                        .iter()
+                        .find(|track| track.source_index == index && track.input == position)
+                        .map_or(0, |track| track.output_index),
+                    fingerprint: source
+                        .manifest
+                        .tracks
+                        .get(index)
+                        .and_then(|record| record.fingerprint.clone()),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+/// The first output track whose fingerprint, read back, is not the one its source had; none when the
+/// output is what was meant.
+fn track_not_carrying_its_source(manifest: &Manifest) -> Option<usize> {
+    // What identifies the content: the samples and the decoder configuration. The position, the
+    // identifier and the counts are the output's own.
+    let identity = |f: &TrackFingerprint| (f.payload_sha256, f.configuration_sha256);
+    manifest.tracks.iter().find_map(|track| {
+        let written = track.fingerprint.as_ref().map(identity);
+        let expected = manifest_source_fingerprint(manifest, track.index).map(identity);
+        (written != expected).then_some(track.index)
+    })
+}
+
+/// Whether two paths name one file, whatever their spelling: a relative form, a different case on a
+/// system that ignores it, a short name, or a link. An existing file is resolved by the system; a file
+/// not yet written is resolved through its directory, which has to exist for it to be written at all.
+fn same_file(existing: &Path, written: &Path) -> bool {
+    let Ok(existing) = std::fs::canonicalize(existing) else {
+        return false;
+    };
+    let resolved = std::fs::canonicalize(written).or_else(|_| {
+        let parent = written.parent().filter(|parent| !parent.as_os_str().is_empty());
+        let directory = std::fs::canonicalize(parent.unwrap_or(Path::new(".")))?;
+        written
+            .file_name()
+            .map(|name| directory.join(name))
+            .ok_or_else(|| std::io::Error::other("no file name"))
+    });
+    resolved.is_ok_and(|resolved| resolved == existing)
+}
+
+/// The manifest's default place: beside the output, with the suffix appended to the whole file name.
+fn manifest_beside(out: &Path) -> PathBuf {
+    let mut name = out
+        .file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+    name.push_str(".manifest.json");
+    out.with_file_name(name)
+}
+
+/// Opens a recording, reads it in full for its manifest, and keeps it open for the copy.
+fn open_source(path: &Path) -> Result<OpenSource, MediaFailure> {
+    let mut source = FileSource::open(path).map_err(|cause| MediaFailure::Open {
+        path: path.to_path_buf(),
+        cause,
+    })?;
+    let name = file_name(path);
+    let file_name_time = parse_name(&name).and_then(|parsed| parsed.time);
+    let manifest = adiungere_manifest::build(&mut source, &name, Scope::Full, &producer(), file_name_time)
+        .map_err(|cause| MediaFailure::Read {
+            path: path.to_path_buf(),
+            cause,
+        })?;
+    let container = adiungere_isobmff::parse(&mut source).map_err(|cause| MediaFailure::Read {
+        path: path.to_path_buf(),
+        cause: cause.into(),
+    })?;
+    Ok(OpenSource {
+        path: path.to_path_buf(),
+        source,
+        container,
+        manifest,
+        tracks: Vec::new(),
+    })
+}
+
+/// The track indices a selection names in a source.
+fn choose(source: &OpenSource, selection: &Selection) -> Result<Vec<usize>, MediaFailure> {
+    let videos: Vec<usize> = source
+        .manifest
+        .tracks
+        .iter()
+        .filter(|track| track.kind == TrackKind::Video)
+        .map(|track| track.index)
+        .collect();
+    let audios: Vec<usize> = source
+        .manifest
+        .tracks
+        .iter()
+        .filter(|track| track.kind == TrackKind::Audio)
+        .map(|track| track.index)
+        .collect();
+    let refuse = |reason: &str| MediaFailure::Selection {
+        path: source.path.clone(),
+        reason: reason.to_owned(),
+    };
+    let with_audio = |video: usize| {
+        let mut tracks = vec![video];
+        tracks.extend(audios.iter().copied());
+        tracks.sort_unstable();
+        tracks
+    };
+    match selection {
+        Selection::Front => videos
+            .first()
+            .map(|&video| with_audio(video))
+            .ok_or_else(|| refuse("the recording has no video track")),
+        Selection::Rear => videos
+            .get(1)
+            .map(|&video| with_audio(video))
+            .ok_or_else(|| refuse("the recording has one video track, so there is no rear camera to keep")),
+        Selection::Both => Ok(source.manifest.tracks.iter().map(|track| track.index).collect()),
+        Selection::Tracks(indices) => {
+            if indices.is_empty() {
+                return Err(refuse("no track was named"));
+            }
+            match indices
+                .iter()
+                .find(|&&index| index >= source.manifest.tracks.len())
+            {
+                Some(missing) => Err(refuse(&format!("the recording has no track {missing}"))),
+                None => Ok(indices.clone()),
+            }
+        },
+    }
+}
+
+/// The video track a rear-camera file contributes to a join: its first, and only its video.
+fn second_video_track(source: &OpenSource) -> Result<Vec<usize>, MediaFailure> {
+    source
+        .manifest
+        .tracks
+        .iter()
+        .find(|track| track.kind == TrackKind::Video)
+        .map(|track| vec![track.index])
+        .ok_or_else(|| MediaFailure::Selection {
+            path: source.path.clone(),
+            reason: "the second recording has no video track".to_owned(),
+        })
+}
+
+/// Runs the remux into the partial file, reporting progress on the standard error stream for a person.
+fn write_output(
+    sources: &mut [OpenSource],
+    partial: &Path,
+    output: Output,
+    stop: &AtomicBool,
+) -> Result<adiungere_isobmff::RemuxReport, MediaFailure> {
+    let file = std::fs::File::create(partial).map_err(|cause| MediaFailure::Write {
+        path: partial.to_path_buf(),
+        cause,
+    })?;
+    let mut writer = std::io::BufWriter::new(file);
+    let mut inputs: Vec<adiungere_isobmff::Input<'_>> = sources
+        .iter_mut()
+        .map(|source| adiungere_isobmff::Input {
+            container: &source.container,
+            source: &mut source.source,
+            tracks: source.tracks.clone(),
+        })
+        .collect();
+    let mut last_percent = u64::MAX;
+    let mut progress = |progress: &adiungere_isobmff::Progress| {
+        if stop.load(Ordering::Relaxed) {
+            return false;
+        }
+        if output == Output::Text && progress.bytes_total > 0 {
+            let percent = progress
+                .bytes_written
+                .saturating_mul(100)
+                .checked_div(progress.bytes_total)
+                .unwrap_or(0);
+            if percent != last_percent {
+                eprint!("\r{percent:3}%");
+                last_percent = percent;
+            }
+        }
+        true
+    };
+    let outcome = adiungere_isobmff::remux(
+        &mut inputs,
+        &adiungere_isobmff::RemuxPlan::default(),
+        &mut writer,
+        &mut progress,
+    );
+    if output == Output::Text && last_percent != u64::MAX {
+        eprintln!();
+    }
+    let report = match outcome {
+        Ok(report) => report,
+        Err(cause) => {
+            drop(writer);
+            let _ = std::fs::remove_file(partial);
+            return Err(MediaFailure::Export {
+                path: partial.to_path_buf(),
+                cause,
+            });
+        },
+    };
+    writer.flush().map_err(|cause| MediaFailure::Write {
+        path: partial.to_path_buf(),
+        cause,
+    })?;
+    Ok(report)
+}
+
+/// Reads the written file back in full and builds its manifest, naming the export it came from.
+fn read_back(
+    partial: &Path,
+    out: &Path,
+    class: ExportClass,
+    sources: Vec<SourceRecord>,
+) -> Result<Manifest, MediaFailure> {
+    let mut written = FileSource::open(partial).map_err(|cause| MediaFailure::Open {
+        path: partial.to_path_buf(),
+        cause,
+    })?;
+    let name = file_name(out);
+    let file_name_time = parse_name(&name).and_then(|parsed| parsed.time);
+    adiungere_manifest::build_for_export(
+        &mut written,
+        &name,
+        &producer(),
+        file_name_time,
+        Operation::Export {
+            class,
+            masking: Masking::None,
+            sources,
+        },
+    )
+    .map_err(|cause| MediaFailure::Read {
+        path: partial.to_path_buf(),
+        cause,
+    })
+}
+
+/// The fingerprint the sources recorded for the track that landed at an output index.
+fn manifest_source_fingerprint(manifest: &Manifest, output_index: usize) -> Option<&TrackFingerprint> {
+    match &manifest.produced.operation {
+        Operation::Export { sources, .. } => sources
+            .iter()
+            .flat_map(|source| source.tracks.iter())
+            .find(|track| track.output_index == output_index)
+            .and_then(|track| track.fingerprint.as_ref()),
+        Operation::Inspection { .. } => None,
+    }
+}
+
+fn describe_export(exported: &Exported, sources: &[OpenSource]) -> String {
+    let mut text = String::new();
+    let class = match &exported.manifest.produced.operation {
+        Operation::Export { class, .. } => class_label(*class),
+        Operation::Inspection { .. } => "inspection",
+    };
+    let _ = writeln!(
+        text,
+        "{}",
+        render(
+            Phrase::ExportWritten,
+            &[
+                ("name", &file_name(&exported.output)),
+                ("class", class),
+                ("bytes", &exported.report.bytes_written.to_string()),
+                ("count", &exported.report.tracks.len().to_string()),
+            ]
+        )
+    );
+    for track in &exported.report.tracks {
+        let source_name = sources
+            .get(track.input)
+            .map_or_else(String::new, |source| file_name(&source.path));
+        let _ = writeln!(
+            text,
+            "  {}",
+            render(
+                Phrase::ExportTrack,
+                &[
+                    ("output", &track.output_index.to_string()),
+                    ("source", &track.source_index.to_string()),
+                    ("name", &source_name),
+                    ("samples", &track.samples.to_string()),
+                    ("bytes", &track.bytes.to_string()),
+                ]
+            )
+        );
+    }
+    if exported.report.preserved.is_empty() {
+        let _ = writeln!(text, "  {}", render(Phrase::ExportPreservedNone, &[]));
+    } else {
+        let _ = writeln!(
+            text,
+            "  {}",
+            render(
+                Phrase::ExportPreserved,
+                &[
+                    ("count", &exported.report.preserved.len().to_string()),
+                    ("list", &exported.report.preserved.join(", ")),
+                ]
+            )
+        );
+    }
+    if exported.report.references_dropped > 0 {
+        let _ = writeln!(
+            text,
+            "  {}",
+            render(
+                Phrase::ExportReferencesDropped,
+                &[("count", &exported.report.references_dropped.to_string())]
+            )
+        );
+    }
+    let _ = writeln!(
+        text,
+        "  {}",
+        render(
+            Phrase::ExportManifest,
+            &[("path", &exported.manifest_path.display().to_string())]
+        )
+    );
+    let _ = writeln!(text, "  {}", render(Phrase::ExportFaces, &[]));
+    let _ = writeln!(text);
+    let _ = writeln!(text, "{}", render(Phrase::FactsOnly, &[]));
+    text
+}
+
+/// The permanent label of an export class, as the manifest writes it.
+fn class_label(class: ExportClass) -> &'static str {
+    match class {
+        ExportClass::Extraction => "extraction",
+        ExportClass::TwoTrackArchive => "two_track_archive",
+        ExportClass::RenditionLossy => "rendition_lossy",
+        ExportClass::RenditionLosslessVerified => "rendition_lossless_verified",
+    }
 }
 
 fn read_manifest(path: &Path) -> Result<Manifest, MediaFailure> {
@@ -540,87 +1155,97 @@ fn describe_origin(text: &mut String, origin: &adiungere_scan::Origin) {
     }
 }
 
+/// Describes a pair: the two files named, then what each one's structure shows.
+fn describe_pair(text: &mut String, members: &[adiungere_scan::Member]) {
+    let path_of = |camera: adiungere_scan::Camera, absent: &str| {
+        members.iter().find(|member| member.camera == camera).map_or_else(
+            || absent.to_owned(),
+            |member| member.file.path.display().to_string(),
+        )
+    };
+    let front = path_of(adiungere_scan::Camera::Front, "no front file");
+    let rear = path_of(adiungere_scan::Camera::Rear, "no rear file");
+    let _ = writeln!(
+        text,
+        "  {}",
+        render(Phrase::ScanPaired, &[("front", &front), ("rear", &rear)])
+    );
+    for member in members {
+        describe_origin(text, &member.origin);
+    }
+}
+
+/// Describes one recording: what it is, then what its structure shows about where it came from.
+fn describe_recording(text: &mut String, recording: &Recording) {
+    match recording {
+        Recording::SingleFile {
+            file,
+            video_tracks,
+            origin,
+        } => {
+            let phrase = if *video_tracks >= 2 {
+                Phrase::ScanSingleDual
+            } else {
+                Phrase::ScanSingleMono
+            };
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(phrase, &[("name", &file.path.display().to_string())])
+            );
+            describe_origin(text, origin);
+        },
+        Recording::Paired { members, .. } => describe_pair(text, members),
+        Recording::Unpaired { file, origin, .. } => {
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(
+                    Phrase::ScanUnpaired,
+                    &[("name", &file.path.display().to_string())]
+                )
+            );
+            describe_origin(text, origin);
+        },
+        Recording::Unrecognised {
+            file,
+            video_tracks,
+            origin,
+        } => {
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(
+                    Phrase::ScanNotRecognised,
+                    &[
+                        ("name", &file.path.display().to_string()),
+                        ("count", &video_tracks.to_string()),
+                    ]
+                )
+            );
+            describe_origin(text, origin);
+        },
+        Recording::Unreadable { file, reason } => {
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(
+                    Phrase::ScanNotReadable,
+                    &[("name", &file.path.display().to_string()), ("reason", reason)]
+                )
+            );
+        },
+    }
+}
+
 fn describe_recordings(scanned: &Scan) -> String {
     let recordings = &scanned.recordings;
     let mut text = String::new();
     for recording in recordings {
-        match recording {
-            Recording::SingleFile {
-                file,
-                video_tracks,
-                origin,
-            } => {
-                let phrase = if *video_tracks >= 2 {
-                    Phrase::ScanSingleDual
-                } else {
-                    Phrase::ScanSingleMono
-                };
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(phrase, &[("name", &file.path.display().to_string())])
-                );
-                describe_origin(&mut text, origin);
-            },
-            Recording::Paired { members, .. } => {
-                let front = members
-                    .iter()
-                    .find(|member| member.camera == adiungere_scan::Camera::Front)
-                    .map_or_else(
-                        || "no front file".to_owned(),
-                        |member| member.file.path.display().to_string(),
-                    );
-                let rear = members
-                    .iter()
-                    .find(|member| member.camera == adiungere_scan::Camera::Rear)
-                    .map_or_else(
-                        || "no rear file".to_owned(),
-                        |member| member.file.path.display().to_string(),
-                    );
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(Phrase::ScanPaired, &[("front", &front), ("rear", &rear)])
-                );
-                for member in members {
-                    describe_origin(&mut text, &member.origin);
-                }
-            },
-            Recording::Unpaired { file, origin, .. } => {
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(
-                        Phrase::ScanUnpaired,
-                        &[("name", &file.path.display().to_string())]
-                    )
-                );
-                describe_origin(&mut text, origin);
-            },
-            Recording::Unrecognised { file } => {
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(
-                        Phrase::ScanNotRecognised,
-                        &[("name", &file.path.display().to_string())]
-                    )
-                );
-            },
-            Recording::Unreadable { file, reason } => {
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(
-                        Phrase::ScanNotReadable,
-                        &[("name", &file.path.display().to_string()), ("reason", reason)]
-                    )
-                );
-            },
-        }
+        describe_recording(&mut text, recording);
     }
     if recordings.is_empty() {
-        text.push_str("  Nothing was found.\n");
+        let _ = writeln!(text, "  {}", render(Phrase::ScanNothing, &[]));
     }
     if scanned.skipped_by_extension > 0 {
         let _ = writeln!(

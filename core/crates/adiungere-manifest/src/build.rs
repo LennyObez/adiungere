@@ -49,6 +49,42 @@ pub fn build<S: Source>(
     producer: &Producer,
     file_name_time: Option<Civil>,
 ) -> Result<Manifest, Error> {
+    assemble(
+        source,
+        name,
+        scope,
+        producer,
+        file_name_time,
+        Operation::Inspection { scope },
+    )
+}
+
+/// Reads a file the core has just written and builds its manifest, recording the export it came from.
+///
+/// Every sample and every byte is read, so the manifest carries the fingerprints of the output; the
+/// sources' fingerprints are what the caller measured before writing, and travel in the operation.
+///
+/// # Errors
+///
+/// Returns an error when the file cannot be read as a container, or a fingerprint cannot be computed.
+pub fn build_for_export<S: Source>(
+    source: &mut S,
+    name: &str,
+    producer: &Producer,
+    file_name_time: Option<Civil>,
+    operation: Operation,
+) -> Result<Manifest, Error> {
+    assemble(source, name, Scope::Full, producer, file_name_time, operation)
+}
+
+fn assemble<S: Source>(
+    source: &mut S,
+    name: &str,
+    scope: Scope,
+    producer: &Producer,
+    file_name_time: Option<Civil>,
+    operation: Operation,
+) -> Result<Manifest, Error> {
     let container = parse(source)?;
     let tracks = container.tracks()?;
 
@@ -76,7 +112,7 @@ pub fn build<S: Source>(
                 source: TimeSource::SystemClockAtManifest,
                 note: render(Phrase::SystemClockNote, &[]),
             },
-            operation: Operation::Inspection { scope },
+            operation,
         },
         file: FileRecord {
             name: name.to_owned(),

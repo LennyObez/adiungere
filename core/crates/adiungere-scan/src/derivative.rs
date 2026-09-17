@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::grammar::Grammar;
-use crate::probe::Probe;
+use crate::probe::{ContainerSummary, Probe};
 
 /// One sign.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,18 +73,16 @@ pub fn assess(probe: &Probe, siblings: &[Probe]) -> Origin {
         signals.push(Signal::ForeignMuxerTag { tag: tag.clone() });
     }
 
-    let comparable: Vec<&Probe> = siblings
+    // The other files of the population, with what their containers say; a file that could not be read
+    // says nothing, and the probe is not its own sibling.
+    let comparable: Vec<&ContainerSummary> = siblings
         .iter()
-        .filter(|sibling| sibling.name != probe.name && sibling.container.is_some())
+        .filter(|sibling| sibling.name != probe.name)
         .filter(|sibling| are_siblings(probe, sibling))
+        .filter_map(|sibling| sibling.container.as_ref())
         .collect();
 
-    let sibling_has_two = comparable.iter().any(|sibling| {
-        sibling
-            .container
-            .as_ref()
-            .is_some_and(|other| other.video_tracks >= 2)
-    });
+    let sibling_has_two = comparable.iter().any(|other| other.video_tracks >= 2);
     if summary.video_tracks == 1 && sibling_has_two {
         signals.push(Signal::SingleVideoTrackWhereSiblingHasTwo);
     }
@@ -93,19 +91,13 @@ pub fn assess(probe: &Probe, siblings: &[Probe]) -> Origin {
         .parsed
         .as_ref()
         .is_some_and(|parsed| grammar_carries_vendor_boxes(parsed.grammar));
-    let sibling_has_vendor = comparable.iter().any(|sibling| {
-        sibling
-            .container
-            .as_ref()
-            .is_some_and(|other| other.vendor_boxes > 0)
-    });
+    let sibling_has_vendor = comparable.iter().any(|other| other.vendor_boxes > 0);
     if summary.vendor_boxes == 0 && (grammar_expects_vendor || sibling_has_vendor) {
         signals.push(Signal::VendorBoxesAbsent);
     }
 
     let largest = comparable
         .iter()
-        .filter_map(|sibling| sibling.container.as_ref())
         .filter_map(|other| Some((other.width?, other.height?)))
         .max();
     if let (Some(width), Some(height), Some((sibling_width, sibling_height))) =

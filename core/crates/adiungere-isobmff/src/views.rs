@@ -95,8 +95,12 @@ impl<'a> Fields<'a> {
     fn version_and_flags(&mut self) -> Result<(u8, u32), Error> {
         let version = self.u8("version")?;
         let flags = self.take(3, "flags")?;
-        let flags = flags.iter().fold(0u32, |acc, byte| (acc << 8) | u32::from(*byte));
-        Ok((version, flags))
+        // Three bytes, right-aligned into four, are the number itself.
+        let mut padded = [0u8; 4];
+        if let Some(tail) = padded.get_mut(1..) {
+            tail.copy_from_slice(flags);
+        }
+        Ok((version, u32::from_be_bytes(padded)))
     }
 
     fn rest(&self) -> &'a [u8] {
@@ -447,12 +451,16 @@ impl SampleEntry {
 
         let audio = AUDIO_ENTRIES.contains(&&kind.bytes()).then(|| {
             let mut audio = Fields::new(bytes, kind, range.offset);
-            let _ = audio.skip(usize::from(range.header) + 6 + 2, "reserved");
+            // Six reserved bytes and the data reference index; then the version; then the revision level
+            // and the vendor, six bytes; then the channel count and the sample size; then the compression
+            // identifier and the packet size, four bytes; then the sample rate.
+            let _ = audio.skip(usize::from(range.header), "header");
+            let _ = audio.skip(8, "reserved and data reference index");
             let version = audio.u16("version").unwrap_or(0);
-            let _ = audio.skip(2 + 4, "revision and vendor");
+            let _ = audio.skip(6, "revision and vendor");
             let channel_count = audio.u16("channel count").unwrap_or(0);
             let sample_size = audio.u16("sample size").unwrap_or(0);
-            let _ = audio.skip(2 + 2, "predefined and reserved");
+            let _ = audio.skip(4, "compression identifier and packet size");
             let sample_rate = audio.u32("sample rate").unwrap_or(0) >> 16;
             AudioFields {
                 version,

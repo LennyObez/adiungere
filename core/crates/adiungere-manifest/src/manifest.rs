@@ -48,7 +48,7 @@ pub struct Produced {
 }
 
 /// What a manifest records having been done.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Operation {
     /// The file was read and nothing was written.
@@ -56,6 +56,69 @@ pub enum Operation {
         /// How much was read.
         scope: Scope,
     },
+    /// The file this manifest describes was written from the sources listed, by the core.
+    Export {
+        /// The class of the export, which is what every integrity sentence about it derives from.
+        class: ExportClass,
+        /// What was done to faces, plates and the burned-in strip, chosen explicitly and never defaulted.
+        masking: Masking,
+        /// The recordings the output was made from, with the fingerprints of the tracks taken from each.
+        sources: Vec<SourceRecord>,
+    },
+}
+
+/// The four classes an export can belong to, permanent labels that every surface derives its wording
+/// from and nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportClass {
+    /// Coded samples of some tracks copied byte for byte into a rebuilt container.
+    Extraction,
+    /// Every camera as its own video track plus the audio, in one rebuilt container, with no encoder.
+    TwoTrackArchive,
+    /// Composed and re-encoded; the default composition.
+    RenditionLossy,
+    /// Composed and re-encoded without loss, a label granted only after every frame was decoded and
+    /// compared with its source.
+    RenditionLosslessVerified,
+}
+
+/// What an export did to the people, the plates and the burned-in strip in the picture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Masking {
+    /// Nothing was masked: the file is for a claim or a court, and the recipient needs every detail.
+    None,
+    /// Faces and number plates were masked, in a re-encoded rendition.
+    FacesAndPlates,
+    /// Faces, number plates and the strip the recorder burns into the picture were masked.
+    FacesPlatesAndStrip,
+}
+
+/// One recording an export was made from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceRecord {
+    /// The file name, without its directory.
+    pub name: String,
+    /// The size in bytes.
+    pub size: u64,
+    /// The digest of the whole source, when it was read in full.
+    pub sha256: Option<Digest>,
+    /// The tracks taken from this source, each with the fingerprint it had there.
+    pub tracks: Vec<SourceTrack>,
+}
+
+/// One track taken from a source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceTrack {
+    /// The track's index under the source's movie box.
+    pub index: usize,
+    /// The track's index under the output's movie box.
+    pub output_index: usize,
+    /// The track's fingerprint in the source, which an extraction preserves and a rendition does not.
+    pub fingerprint: Option<TrackFingerprint>,
 }
 
 /// How much of a file an inspection read.

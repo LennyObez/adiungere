@@ -59,18 +59,20 @@ success and teaches everyone to trust a green that means nothing.
 
 | Kind of check | Arrives |
 |---|---|
-| Golden tests per export mode | M2 |
-| Property tests over the synthetic corpus | M2 |
+| Golden tests per export mode: the three modes of the reference-like recording pinned by digest in the reader crate's tests | **present** |
+| Property tests over the synthetic corpus: every export mode of every recording preserves the recorder's boxes and the fingerprints, and reads back as it was written | **present** |
 | Third-party digest oracles: the reference script and the pinned media tool on every pull request, the browser and Apple readers in the oracles pipeline | **present** |
-| Independent parser oracle over an extraction's sample tables | M2 |
+| Independent parser oracle over an extraction's sample tables: the pinned media tool counts the packets of every export and decodes every one of them | **present** |
 | Fuzzing of the box reader, the sample tables, the fingerprints, the manifest reader and the naming grammars, nightly on a dated compiler, seeded from the corpus | **present** |
 | Mutation testing and undefined-behaviour checking, nightly | **present** |
 | Reproduction of every pinned number on the private reference recording, nightly | **present**, red until the recording's location is configured as a secret |
-| Byte-identical output across operating systems and WebAssembly | M2, M4 |
+| Byte-identical output across operating systems: the pinned digests run on Linux, macOS on both architectures and Windows | **present** |
+| Byte-identical output from WebAssembly | M4 |
+| No encoder in the release command line: the resolved graph names none, and the binary's symbols carry none | **present** |
 | Browser tests on three engines with a network assertion | M4 |
 
 The synthetic corpus is built by `adiungere-fixtures` from three committed streams, and it is what every
-required check runs on: ten recordings that reproduce every structural property of the reference
+required check runs on: twelve recordings that reproduce every structural property of the reference
 recording and change one at a time. The reference recording itself is private and reaches only the
 nightly pipeline.
 
@@ -135,7 +137,7 @@ first red.
 | 10 | Shell scripts | `shellcheck scripts/*.sh` |
 | 11 | Advisories, licences, sources and bans | `cargo deny check` |
 | 12 | The same policy over the fuzzing project | `cargo deny --manifest-path core/fuzz/Cargo.toml --config core/deny.toml check` |
-| 13 | Golden and property suites | M2, with the first export writer, over the fixture corpus |
+| 13 | No encoder symbol in the release command line | `scripts/check-encoder-symbols.sh`: the fixture refused first, then the release binary read with the toolchain's symbol reader |
 | 14 | Mutation testing, fuzzing, undefined-behaviour checking | nightly pipeline, through scripts/nightly.sh |
 | 15 | Cross-platform and WebAssembly build matrix | pull-request pipeline, the four matrix jobs of the core workflow |
 | 16 | The browser and Apple readers agree with the fingerprint | oracles pipeline, through scripts/oracles.sh |

@@ -62,10 +62,15 @@ pub enum Recording {
         /// What its structure shows about its origin.
         origin: Origin,
     },
-    /// A file that is a container and fits no naming grammar.
+    /// A file that is a container and fits no naming grammar. It has no camera's layout to be compared
+    /// with, so its origin carries only what any container shows.
     Unrecognised {
         /// The file.
         file: ProbedFile,
+        /// How many video tracks it holds.
+        video_tracks: u32,
+        /// What its structure shows about its origin, with the layout unknown.
+        origin: Origin,
     },
     /// A file that could not be read as a container.
     Unreadable {
@@ -80,8 +85,9 @@ pub enum Recording {
 ///
 /// Files are grouped by grammar and stem. A stem with a front file and a rear file is a pair; a stem with
 /// one camera file is unpaired; a file whose name says it holds every camera stands alone. Files that
-/// fit no grammar but read as containers are reported as unrecognised, and files that do not read at all
-/// as unreadable, so that nothing given to the scan disappears from its answer.
+/// fit no grammar but read as containers are reported as unrecognised, with the signs any container
+/// shows and no comparison with a camera's layout, and files that do not read at all as unreadable, so
+/// that nothing given to the scan disappears from its answer.
 #[must_use]
 pub fn group(files: Vec<ProbedFile>) -> Vec<Recording> {
     let siblings: Vec<Probe> = files.iter().map(|file| file.probe.clone()).collect();
@@ -93,20 +99,27 @@ pub fn group(files: Vec<ProbedFile>) -> Vec<Recording> {
             recordings.push(Recording::Unreadable { file, reason });
             continue;
         }
+        let video_tracks = file
+            .probe
+            .container
+            .as_ref()
+            .map_or(0, |summary| summary.video_tracks);
         match file
             .probe
             .parsed
             .as_ref()
             .map(|parsed| (parsed.camera, parsed.stem.clone()))
         {
-            None => recordings.push(Recording::Unrecognised { file }),
+            None => {
+                let origin = assess(&file.probe, &siblings);
+                recordings.push(Recording::Unrecognised {
+                    file,
+                    video_tracks,
+                    origin,
+                });
+            },
             Some((Camera::All, _)) => {
                 let origin = assess(&file.probe, &siblings);
-                let video_tracks = file
-                    .probe
-                    .container
-                    .as_ref()
-                    .map_or(0, |summary| summary.video_tracks);
                 recordings.push(Recording::SingleFile {
                     file,
                     video_tracks,

@@ -231,9 +231,10 @@ impl SampleTable {
         }
 
         let chunk_count = u32::try_from(self.chunk_offsets.len()).unwrap_or(u32::MAX);
-        let mut previous_first = 0u32;
-        for (position, (first, per_chunk, _)) in self.sample_to_chunk.iter().enumerate() {
-            if *first == 0 || (position > 0 && *first <= previous_first) {
+        let mut previous_first: Option<u32> = None;
+        for (first, per_chunk, _) in &self.sample_to_chunk {
+            let ascending = previous_first.is_none_or(|previous| *first > previous);
+            if *first == 0 || !ascending {
                 return Err(self.inconsistent("the sample-to-chunk table is not ascending from chunk one"));
             }
             if *first > chunk_count {
@@ -244,7 +245,7 @@ impl SampleTable {
             if *per_chunk == 0 {
                 return Err(self.inconsistent("the sample-to-chunk table declares an empty chunk"));
             }
-            previous_first = *first;
+            previous_first = Some(*first);
         }
         if count > 0 && (self.sample_to_chunk.is_empty() || self.chunk_offsets.is_empty()) {
             return Err(self.inconsistent("samples are declared and no chunk locates them"));

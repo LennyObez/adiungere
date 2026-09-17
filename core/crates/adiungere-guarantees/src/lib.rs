@@ -268,6 +268,117 @@ pub fn read_at(relative: &str) -> Result<String, std::io::Error> {
     std::fs::read_to_string(repository_root().join(relative))
 }
 
+/// The value of a key inside one table of the versions file, `tools/versions.toml`.
+#[must_use]
+pub fn pinned(table: &str, key: &str) -> Option<String> {
+    let source = without_hash_comments(&read_at("tools/versions.toml").ok()?);
+    let mut inside = false;
+    for line in source.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            inside = line == format!("[{table}]");
+            continue;
+        }
+        if inside
+            && let Some((name, value)) = line.split_once('=')
+            && name.trim() == key
+        {
+            return Some(value.trim().trim_matches('"').to_owned());
+        }
+    }
+    None
+}
+
+/// Whether a candidate media tool sits where the versions file says the fetched one is, or on the path,
+/// and reports the pinned version. The versions file decides acceptance and nothing else: no value read
+/// from it becomes part of a command.
+fn is_the_pinned_media_tool(candidate: &Path, tools: &Path) -> bool {
+    let Some(version) = pinned("ffmpeg", "version") else {
+        return false;
+    };
+    let Some(binary) = pinned("ffmpeg.linux-x86_64", "binary") else {
+        return false;
+    };
+    if candidate.starts_with(tools) && candidate != tools.join(binary) {
+        return false;
+    }
+    let Ok(output) = Command::new(candidate).arg("-version").output() else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .is_some_and(|first| first.contains(&version))
+}
+
+/// The pinned media tool, from the fetched tools directory or the path, at the pinned version only, or
+/// the sentence to print when it is absent. A guarantee that needs it fails on that sentence rather than
+/// skipping: a step that did not run is not a step that passed.
+///
+/// The candidates come from listing the tools directory, never from a value read out of a file.
+///
+/// # Errors
+///
+/// Returns the sentence when no candidate reports the pinned version.
+pub fn pinned_media_tool() -> Result<PathBuf, String> {
+    let tools = repository_root().join(".tools");
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&tools)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path().join("bin").join("ffmpeg"))
+                .collect()
+        })
+        .unwrap_or_default();
+    candidates.push(PathBuf::from("ffmpeg"));
+
+    candidates
+        .into_iter()
+        .find(|candidate| is_the_pinned_media_tool(candidate, &tools))
+        .ok_or_else(|| {
+            "the media tool at the version pinned in tools/versions.toml was not found. Run \
+             scripts/fetch-tools.sh; a guarantee that skipped it would be a guarantee that proved nothing"
+                .to_owned()
+        })
+}
+
+/// The probing companion of the pinned media tool, which the same archive places beside it, accepted
+/// only when it reports the same pinned version: a companion found beside the tool but built from
+/// something else would count packets with a different parser than the one the guarantee names.
+///
+/// # Errors
+///
+/// Returns the sentence when the media tool is absent, or when the companion beside it is absent or
+/// reports another version.
+pub fn pinned_media_prober() -> Result<PathBuf, String> {
+    let tool = pinned_media_tool()?;
+    [tool.with_file_name("ffprobe")]
+        .into_iter()
+        .find(|candidate| reports_the_pinned_version(candidate))
+        .ok_or_else(|| {
+            format!(
+                "the probing companion of the media tool is absent beside {} or is not at the pinned \
+                 version. Run scripts/fetch-tools.sh; a guarantee that counted packets with another parser \
+                 would be comparing against the wrong oracle",
+                tool.display()
+            )
+        })
+}
+
+/// Whether a candidate tool prints the pinned media tool version on the first line of its version report.
+fn reports_the_pinned_version(candidate: &Path) -> bool {
+    let Some(version) = pinned("ffmpeg", "version") else {
+        return false;
+    };
+    let Ok(output) = Command::new(candidate).arg("-version").output() else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .is_some_and(|first| first.contains(&version))
+}
+
 /// Returns the text with every line comment and every line that is only a comment removed, for
 /// configuration files that use `#`.
 ///

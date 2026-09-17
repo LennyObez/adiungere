@@ -25,6 +25,7 @@ adiungere-fingerprint = { path = "../adiungere-fingerprint" }
 adiungere-fixtures = { path = "../adiungere-fixtures" }
 adiungere-isobmff = { path = "../adiungere-isobmff" }
 adiungere-manifest = { path = "../adiungere-manifest" }
+adiungere-scan = { path = "../adiungere-scan" }
 serde_json = { workspace = true }
 # The licence text is compared by digest against its canonical publication, not by a handful of markers a
 # one-word edit would leave intact.

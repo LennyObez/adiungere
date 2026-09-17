@@ -145,15 +145,24 @@ impl Parser {
             return Err(Error::Protocol);
         };
 
+        let before = self.position;
         match outstanding {
-            Outstanding::Header { offset } => self.on_header(offset, bytes),
+            Outstanding::Header { offset } => self.on_header(offset, bytes)?,
             Outstanding::Body {
                 kind,
                 offset,
                 size,
                 header,
-            } => self.on_body(kind, offset, size, header, bytes),
+            } => self.on_body(kind, offset, size, header, bytes)?,
         }
+
+        // Every fed range either moves the reader forward or leaves a request for the bytes that will.
+        // Anything else is a reader that would ask for the same range forever, and a driver has no way to
+        // tell that apart from progress, so the reader refuses here.
+        if self.position <= before && self.outstanding.is_none() {
+            return Err(Error::Stalled { offset: before });
+        }
+        Ok(())
     }
 
     /// Records everything from `offset` to the end of the file as a clipped tail that is not a box.
@@ -614,11 +623,24 @@ fn fixed_fields_length(kind: FourCc, entry: &[u8]) -> Option<usize> {
     const VISUAL: [&[u8; 4]; 6] = [b"avc1", b"avc3", b"hvc1", b"hev1", b"mp4v", b"encv"];
     const AUDIO: [&[u8; 4]; 4] = [b"mp4a", b"enca", b"ac-3", b"ec-3"];
 
+    // The totals are written as the standard gives them, so that a reader checks them against the field
+    // list in the comment rather than against an arithmetic expression: an eight-byte header, then the
+    // fixed fields of the entry.
+    //
+    // Visual: six reserved bytes, the data reference index, sixteen predefined and reserved bytes, width,
+    // height, two resolutions, four reserved bytes, a frame count, a thirty-two byte compressor name, a
+    // depth and a predefined value: seventy-eight bytes after the header.
+    const VISUAL_FIXED: usize = 86;
+    // Audio, version 0: six reserved bytes, the data reference index, eight bytes of version, revision
+    // and vendor, the channel count, the sample size, four predefined and reserved bytes, the sample
+    // rate: twenty-eight bytes after the header. Version 1 adds sixteen bytes of compression fields,
+    // version 2 replaces the tail with thirty-six bytes of extended fields.
+    const AUDIO_FIXED_V0: usize = 36;
+    const AUDIO_FIXED_V1: usize = 52;
+    const AUDIO_FIXED_V2: usize = 72;
+
     if VISUAL.contains(&&kind.bytes()) {
-        // Header, six reserved bytes, the data reference index, sixteen predefined and reserved bytes,
-        // width, height, two resolutions, four reserved bytes, a frame count, a thirty-two byte compressor
-        // name, a depth and a predefined value.
-        return Some(8 + 6 + 2 + 16 + 2 + 2 + 4 + 4 + 4 + 2 + 32 + 2 + 2);
+        return Some(VISUAL_FIXED);
     }
 
     if AUDIO.contains(&&kind.bytes()) {
@@ -628,9 +650,9 @@ fn fixed_fields_length(kind: FourCc, entry: &[u8]) -> Option<usize> {
             Some(u16::from_be_bytes(array))
         })?;
         return match version {
-            0 => Some(8 + 6 + 2 + 8 + 2 + 2 + 2 + 2 + 4),
-            1 => Some(8 + 6 + 2 + 8 + 2 + 2 + 2 + 2 + 4 + 16),
-            2 => Some(8 + 6 + 2 + 8 + 2 + 2 + 2 + 2 + 4 + 36),
+            0 => Some(AUDIO_FIXED_V0),
+            1 => Some(AUDIO_FIXED_V1),
+            2 => Some(AUDIO_FIXED_V2),
             _ => None,
         };
     }
@@ -673,12 +695,10 @@ impl Container {
     /// The bytes of a box, header included, if the reader held them.
     #[must_use]
     pub fn bytes_of(&self, range: &BoxRange) -> Option<&[u8]> {
+        // A range served from a hold has to lie inside it: the subtraction fails when it starts before
+        // the hold, and the slice fails when it ends after it.
         let end = range.offset.checked_add(range.size)?;
         self.held.iter().find_map(|held| {
-            let held_end = held.offset.checked_add(held.bytes.len() as u64)?;
-            if range.offset < held.offset || end > held_end {
-                return None;
-            }
             let start = usize::try_from(range.offset.checked_sub(held.offset)?).ok()?;
             let stop = usize::try_from(end.checked_sub(held.offset)?).ok()?;
             held.bytes.get(start..stop)
@@ -758,9 +778,21 @@ impl Container {
     /// Whether the movie box precedes the first media data box. `None` when there is no media data box.
     #[must_use]
     pub fn moov_before_mdat(&self) -> Option<bool> {
-        let moov = self.top_level.iter().position(|range| range.kind == b"moov")?;
-        let mdat = self.top_level.iter().position(|range| range.kind == b"mdat")?;
-        Some(moov < mdat)
+        // Whichever of the two comes first in file order answers, provided both exist.
+        let has_mdat = self.top_level.iter().any(|range| range.kind == b"mdat");
+        let has_moov = self.top_level.iter().any(|range| range.kind == b"moov");
+        if !has_mdat || !has_moov {
+            return None;
+        }
+        self.top_level.iter().find_map(|range| {
+            if range.kind == b"moov" {
+                Some(true)
+            } else if range.kind == b"mdat" {
+                Some(false)
+            } else {
+                None
+            }
+        })
     }
 
     /// The media data boxes, as ranges.
@@ -869,9 +901,9 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::{
-        Container, FILE_TYPE_BOX_CAP, Held, MAX_CHILDREN, MAX_DEPTH, MAX_TOP_LEVEL, MOVIE_BOX_CAP, Parser,
-        Policy, Step, UNKNOWN_BOX_HOLD_CAP, enumerate, fixed_fields_length, looks_like_a_box_start,
-        read_header,
+        Container, FILE_TYPE_BOX_CAP, Held, MAX_CHILDREN, MAX_DEPTH, MAX_TOP_LEVEL, MOVIE_BOX_CAP,
+        Outstanding, Parser, Policy, Step, UNKNOWN_BOX_HOLD_CAP, enumerate, fixed_fields_length,
+        looks_like_a_box_start, read_header,
     };
     use crate::error::Error;
     use crate::fourcc::FourCc;
@@ -999,6 +1031,30 @@ mod tests {
         assert!(matches!(fed_early, Err(Error::Protocol)));
         assert!(matches!(first, Ok(Step::Read(request)) if request.offset == 0 && request.length == 16));
         assert!(matches!(second, Err(Error::Protocol)));
+    }
+
+    #[test]
+    fn a_reader_that_does_not_move_forward_is_stopped_rather_than_driven_forever() {
+        // No input reaches this state; it is what a defect in the reader would look like, and the driver
+        // has to be told rather than left asking for the same range until the end of time.
+
+        // Arrange: a reader that believes it stands at fifty and is handed a header for offset zero.
+        let mut parser = Parser::new(100);
+        parser.position = 50;
+        parser.outstanding = Some(Outstanding::Header { offset: 0 });
+
+        // Act
+        let outcome = parser.feed(b"\0\0\0\x14free\0\0\0\0\0\0\0\0");
+
+        // Assert
+        assert!(
+            matches!(outcome, Err(Error::Stalled { offset: 50 })),
+            "{outcome:?}"
+        );
+        assert_eq!(
+            Error::Stalled { offset: 50 }.to_string(),
+            "the reader made no progress at 50"
+        );
     }
 
     #[test]
@@ -1207,6 +1263,11 @@ mod tests {
         assert_eq!(
             container(10, vec![range(*b"moov", 0, 10)], vec![]).moov_before_mdat(),
             None
+        );
+        assert_eq!(
+            container(30, vec![range(*b"ftyp", 0, 10), range(*b"mdat", 10, 20)], vec![]).moov_before_mdat(),
+            None,
+            "without a movie box there is nothing to place"
         );
     }
 }

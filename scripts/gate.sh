@@ -102,5 +102,8 @@ run 'advisories, licences, sources and bans' cargo deny --manifest-path "$worksp
 # applies to it, or its engine's licence goes unchecked.
 run 'the same policy over the fuzzing project' \
     cargo deny --manifest-path "$root/core/fuzz/Cargo.toml" --config "$root/core/deny.toml" check
+# The release command line, read symbol by symbol: a lossless export must not be able to reach an encoder,
+# and that is a property of the binary, so it is checked on the binary.
+run 'no encoder symbol in the release command line' "$root/scripts/check-encoder-symbols.sh"
 
 printf '\nEvery step ran and every step passed. Output is in %s\n' "$output"

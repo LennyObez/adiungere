@@ -117,8 +117,49 @@ enum Command {
         format: Format,
     },
 
+    /// Write one camera, or both, to a new file without re-encoding, with the recorder's boxes carried
+    /// across and a manifest of what was written.
+    Export {
+        /// The recording; with a second file, the first gives its front camera and audio and the second
+        /// its rear camera, joined into one two-track file.
+        #[arg(value_name = "FILE", num_args = 1..=2, required = true)]
+        files: Vec<PathBuf>,
+
+        /// Which camera to keep. Front is the first video track and rear the second, in the order the
+        /// file lists them; the container itself does not name them.
+        #[arg(long, value_enum, default_value_t = Camera::Both)]
+        camera: Camera,
+
+        /// Keep exactly these tracks of the first file, by index, instead of choosing by camera.
+        #[arg(long, value_name = "INDEX", value_delimiter = ',', conflicts_with = "camera")]
+        tracks: Option<Vec<usize>>,
+
+        /// Where to write the output.
+        #[arg(long, value_name = "PATH")]
+        out: PathBuf,
+
+        /// Where to write the manifest; beside the output with `.manifest.json` appended when absent.
+        #[arg(long, value_name = "PATH")]
+        manifest: Option<PathBuf>,
+
+        /// How to print the answer.
+        #[arg(long, value_enum, default_value_t = Format::Text)]
+        format: Format,
+    },
+
     /// Read the evidence register.
     Probes(Probes),
+}
+
+/// Which camera an export keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Camera {
+    /// The first video track and the audio.
+    Front,
+    /// The second video track and the audio.
+    Rear,
+    /// Every track, as the recorder wrote them.
+    Both,
 }
 
 #[derive(Debug, Args)]
@@ -287,6 +328,9 @@ fn emit(answer: &Answer) -> ExitCode {
     }
 }
 
+/// Set by the interrupt handler, read by the export between two chunks.
+static STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn run() -> Result<Answer, Failure> {
     let cli = Cli::parse();
 
@@ -314,6 +358,35 @@ fn run() -> Result<Answer, Failure> {
         Command::Report { manifest, format } => media::report(&manifest, output(format))
             .map(answer)
             .map_err(Failure::Media),
+        Command::Export {
+            files,
+            camera,
+            tracks,
+            out,
+            manifest,
+            format,
+        } => {
+            let selection = match (tracks, camera) {
+                (Some(indices), _) => media::Selection::Tracks(indices),
+                (None, Camera::Front) => media::Selection::Front,
+                (None, Camera::Rear) => media::Selection::Rear,
+                (None, Camera::Both) => media::Selection::Both,
+            };
+            // An interrupt asks the export to stop at the next chunk; the partial output is then removed
+            // rather than left looking finished. If no handler can be installed, the export still runs
+            // and an interrupt ends the process the ordinary way.
+            let _ = ctrlc::set_handler(|| STOP.store(true, std::sync::atomic::Ordering::Relaxed));
+            media::export(
+                &files,
+                &selection,
+                &out,
+                manifest.as_deref(),
+                output(format),
+                &STOP,
+            )
+            .map(answer)
+            .map_err(Failure::Media)
+        },
         Command::Probes(probes) => run_probes(probes),
     }
 }
