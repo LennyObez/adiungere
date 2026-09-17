@@ -77,6 +77,13 @@ pub enum MediaFailure {
         /// What went wrong.
         cause: adiungere_isobmff::Error,
     },
+    /// A path the export would write is a recording it reads.
+    Overwrite {
+        /// The path that would be written.
+        path: PathBuf,
+        /// The source it names.
+        source: PathBuf,
+    },
     /// The output, read back, does not carry the fingerprints of its sources, which the writer cannot
     /// cause and a person must know about.
     Mismatch {
@@ -103,6 +110,12 @@ impl std::fmt::Display for MediaFailure {
             Self::Serialisation { cause } => write!(formatter, "cannot write the answer: {cause}"),
             Self::Selection { path, reason } => write!(formatter, "{}: {reason}", path.display()),
             Self::Export { path, cause } => write!(formatter, "{}: {cause}", path.display()),
+            Self::Overwrite { path, source } => write!(
+                formatter,
+                "{} is the recording {} being exported; nothing was written",
+                path.display(),
+                source.display()
+            ),
             Self::Mismatch { path, track } => write!(
                 formatter,
                 "{}: track {track} read back with a fingerprint that is not its source's; the output was \
@@ -319,6 +332,7 @@ struct ExportReport {
     chunks: u32,
     wide_offsets: bool,
     renumbered: bool,
+    references_dropped: u32,
     tracks: Vec<ExportedTrack>,
     preserved: Vec<String>,
 }
@@ -359,12 +373,24 @@ pub fn export(
     output: Output,
     stop: &AtomicBool,
 ) -> Result<Rendered, MediaFailure> {
-    let mut sources = open_sources(files, selection, out)?;
-    let class = class_of(&sources);
-
     // The output is written under a temporary name and moved into place once it is complete and read
     // back, so a stopped or failed export never leaves a file that looks finished.
     let partial = out.with_extension("part");
+    let manifest_path = manifest_to.map_or_else(|| manifest_beside(out), Path::to_path_buf);
+
+    // Nothing this command writes may be a recording it reads, under any spelling of the path: the
+    // check runs before a byte is written, and refuses the export rather than the source.
+    for written in [out, &partial, &manifest_path] {
+        if let Some(source) = files.iter().find(|file| same_file(file, written)) {
+            return Err(MediaFailure::Overwrite {
+                path: written.to_path_buf(),
+                source: source.clone(),
+            });
+        }
+    }
+
+    let mut sources = open_sources(files, selection, out)?;
+    let class = class_of(&sources);
     let report = write_output(&mut sources, &partial, output, stop)?;
     let manifest = read_back(&partial, out, class, source_records(&sources, &report))?;
     if let Some(track) = track_not_carrying_its_source(&manifest) {
@@ -379,7 +405,6 @@ pub fn export(
         cause,
     })?;
 
-    let manifest_path = manifest_to.map_or_else(|| manifest_beside(out), Path::to_path_buf);
     let canonical = manifest
         .to_canonical_json()
         .map_err(|cause| MediaFailure::Serialisation { cause })?;
@@ -396,6 +421,7 @@ pub fn export(
             chunks: report.chunks,
             wide_offsets: report.wide_offsets,
             renumbered: report.renumbered,
+            references_dropped: report.references_dropped,
             tracks: report
                 .tracks
                 .iter()
@@ -520,11 +546,32 @@ fn source_records(sources: &[OpenSource], report: &adiungere_isobmff::RemuxRepor
 /// The first output track whose fingerprint, read back, is not the one its source had; none when the
 /// output is what was meant.
 fn track_not_carrying_its_source(manifest: &Manifest) -> Option<usize> {
+    // What identifies the content: the samples and the decoder configuration. The position, the
+    // identifier and the counts are the output's own.
+    let identity = |f: &TrackFingerprint| (f.payload_sha256, f.configuration_sha256);
     manifest.tracks.iter().find_map(|track| {
-        let written = track.fingerprint.as_ref().map(|f| f.payload_sha256);
-        let expected = manifest_source_fingerprint(manifest, track.index).map(|f| f.payload_sha256);
+        let written = track.fingerprint.as_ref().map(identity);
+        let expected = manifest_source_fingerprint(manifest, track.index).map(identity);
         (written != expected).then_some(track.index)
     })
+}
+
+/// Whether two paths name one file, whatever their spelling: a relative form, a different case on a
+/// system that ignores it, a short name, or a link. An existing file is resolved by the system; a file
+/// not yet written is resolved through its directory, which has to exist for it to be written at all.
+fn same_file(existing: &Path, written: &Path) -> bool {
+    let Ok(existing) = std::fs::canonicalize(existing) else {
+        return false;
+    };
+    let resolved = std::fs::canonicalize(written).or_else(|_| {
+        let parent = written.parent().filter(|parent| !parent.as_os_str().is_empty());
+        let directory = std::fs::canonicalize(parent.unwrap_or(Path::new(".")))?;
+        written
+            .file_name()
+            .map(|name| directory.join(name))
+            .ok_or_else(|| std::io::Error::other("no file name"))
+    });
+    resolved.is_ok_and(|resolved| resolved == existing)
 }
 
 /// The manifest's default place: beside the output, with the suffix appended to the whole file name.
@@ -784,6 +831,16 @@ fn describe_export(exported: &Exported, sources: &[OpenSource]) -> String {
                     ("count", &exported.report.preserved.len().to_string()),
                     ("list", &exported.report.preserved.join(", ")),
                 ]
+            )
+        );
+    }
+    if exported.report.references_dropped > 0 {
+        let _ = writeln!(
+            text,
+            "  {}",
+            render(
+                Phrase::ExportReferencesDropped,
+                &[("count", &exported.report.references_dropped.to_string())]
             )
         );
     }

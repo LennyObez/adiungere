@@ -342,14 +342,37 @@ pub fn pinned_media_tool() -> Result<PathBuf, String> {
         })
 }
 
-/// The probing companion of the pinned media tool, which the same archive places beside it.
+/// The probing companion of the pinned media tool, which the same archive places beside it, accepted
+/// only when it reports the same pinned version: a companion found beside the tool but built from
+/// something else would count packets with a different parser than the one the guarantee names.
 ///
 /// # Errors
 ///
-/// Returns the sentence when the media tool is absent.
+/// Returns the sentence when the media tool is absent, or when the companion beside it is absent or
+/// reports another version.
 pub fn pinned_media_prober() -> Result<PathBuf, String> {
     let tool = pinned_media_tool()?;
-    Ok(tool.with_file_name("ffprobe"))
+    let prober = tool.with_file_name("ffprobe");
+    let version = pinned("ffmpeg", "version").ok_or("tools/versions.toml pins no media tool version")?;
+    let reported = Command::new(&prober)
+        .arg("-version")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default();
+    if reported
+        .lines()
+        .next()
+        .is_some_and(|first| first.contains(&version))
+    {
+        Ok(prober)
+    } else {
+        Err(format!(
+            "the probing companion of the media tool is absent beside {} or is not at the pinned version. \
+             Run scripts/fetch-tools.sh; a guarantee that counted packets with another parser would be \
+             comparing against the wrong oracle",
+            tool.display()
+        ))
+    }
 }
 
 /// Returns the text with every line comment and every line that is only a comment removed, for

@@ -72,7 +72,7 @@ success and teaches everyone to trust a green that means nothing.
 | Browser tests on three engines with a network assertion | M4 |
 
 The synthetic corpus is built by `adiungere-fixtures` from three committed streams, and it is what every
-required check runs on: ten recordings that reproduce every structural property of the reference
+required check runs on: twelve recordings that reproduce every structural property of the reference
 recording and change one at a time. The reference recording itself is private and reaches only the
 nightly pipeline.
 

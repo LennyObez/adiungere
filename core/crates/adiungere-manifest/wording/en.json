@@ -56,6 +56,7 @@
     "export.track": "Track {output} is track {source} of {name}: {samples} samples, {bytes} bytes, fingerprint identical to the source.",
     "export.preserved": "{count} box(es) carried across as bytes, not interpreted: {list}.",
     "export.preserved.none": "No recorder box was carried across, because the source holds none or the plan left them out.",
+    "export.references.dropped": "{count} track reference(s) named a track this file does not hold and were left out, so nothing here refers to a track that is not here.",
     "export.manifest": "The manifest of this file is at {path}; it records the sources and their fingerprints.",
     "export.faces": "This export shows faces, number plates, and the time and position the recorder wrote into the picture. Sharing it publicly may be subject to data-protection rules; the originals stay on this device."
   }

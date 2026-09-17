@@ -150,6 +150,8 @@ pub enum Phrase {
     ExportPreserved,
     /// An export carried no box across.
     ExportPreservedNone,
+    /// An export left out track references to tracks it does not hold.
+    ExportReferencesDropped,
     /// Where the export's manifest was written.
     ExportManifest,
     /// What an export shows of people and places, said after every export.
@@ -158,7 +160,7 @@ pub enum Phrase {
 
 impl Phrase {
     /// Every phrase, so that the catalogue can be checked against the code in both directions.
-    pub const ALL: [Self; 57] = [
+    pub const ALL: [Self; 58] = [
         Self::FactsOnly,
         Self::NotAnExamination,
         Self::MoovFirst,
@@ -214,6 +216,7 @@ impl Phrase {
         Self::ExportTrack,
         Self::ExportPreserved,
         Self::ExportPreservedNone,
+        Self::ExportReferencesDropped,
         Self::ExportManifest,
         Self::ExportFaces,
     ];
@@ -277,6 +280,7 @@ impl Phrase {
             Self::ExportTrack => "export.track",
             Self::ExportPreserved => "export.preserved",
             Self::ExportPreservedNone => "export.preserved.none",
+            Self::ExportReferencesDropped => "export.references.dropped",
             Self::ExportManifest => "export.manifest",
             Self::ExportFaces => "export.faces",
         }

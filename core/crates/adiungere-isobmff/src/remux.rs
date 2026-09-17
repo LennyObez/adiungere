@@ -12,7 +12,7 @@
 //! the media data box, so the output plays before it has finished arriving. Media is copied chunk by chunk
 //! through a bounded buffer, so the memory needed does not grow with the recording.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 
 use crate::error::Error;
@@ -124,6 +124,9 @@ pub struct RemuxReport {
     pub chunks: u32,
     /// Whether the track identifiers were renumbered, which happens when two inputs are joined.
     pub renumbered: bool,
+    /// How many track references pointed at a track the output does not hold and were dropped, so that
+    /// nothing in the output refers to a track that is not there.
+    pub references_dropped: u32,
 }
 
 /// One track selected for the output, with everything the layout needs.
@@ -187,28 +190,33 @@ pub fn remux(
     } else {
         Vec::new()
     };
-    let unknown_bytes = unknown
-        .iter()
-        .map(|range| held(primary, range))
-        .collect::<Result<Vec<&[u8]>, Error>>()?;
     let before_moov = ftyp.map_or(0, |bytes| bytes.len() as u64);
-    let after_moov: u64 = unknown_bytes.iter().map(|bytes| bytes.len() as u64).sum();
+    let after_moov: u64 = unknown.iter().map(|range| range.size).sum();
     let large_mdat = needs_large_header(media);
     let mdat_header: u64 = if large_mdat { 16 } else { 8 };
+    let ids = identifiers(&selected);
+    let layout = Layout {
+        primary,
+        selected: &selected,
+        chunks: &chunks,
+        ids: &ids,
+        keep_udta: plan.keep_udta,
+        renumbered,
+    };
 
     // The movie box is laid out twice at most: once to learn its size with narrow offsets, and again
     // with wide ones if the media would end past what narrow offsets can address. The offsets do not
     // change the size of the movie box, only their width does.
     let media_start = |moov_len: u64| before_moov + moov_len + after_moov + mdat_header;
-    let keep_udta = plan.keep_udta;
     let mut wide = false;
-    let narrow_moov = movie_box(primary, &selected, &chunks, keep_udta, renumbered, wide, 0)?;
+    let narrow_moov = movie_box(&layout, wide, 0)?;
     if !fits_narrow_offsets(media_start(narrow_moov.len() as u64).saturating_add(media)) {
         wide = true;
     }
-    let sized_moov = movie_box(primary, &selected, &chunks, keep_udta, renumbered, wide, 0)?;
+    let sized_moov = movie_box(&layout, wide, 0)?;
     let base = media_start(sized_moov.len() as u64);
-    let moov = movie_box(primary, &selected, &chunks, keep_udta, renumbered, wide, base)?;
+    let moov = movie_box(&layout, wide, base)?;
+    let references_dropped = layout.references_dropped()?;
 
     let bytes_total = base + media;
     let mut written = Counting { inner: out, bytes: 0 };
@@ -217,8 +225,8 @@ pub fn remux(
         written.write_all(bytes)?;
     }
     written.write_all(&moov)?;
-    for bytes in &unknown_bytes {
-        written.write_all(bytes)?;
+    for range in &unknown {
+        copy_box(inputs, primary, range, &mut written)?;
     }
     written.write_all(&box_header(*b"mdat", media, large_mdat))?;
 
@@ -236,8 +244,21 @@ pub fn remux(
     }
     written.flush()?;
 
+    Ok(RemuxReport {
+        bytes_written: written.bytes,
+        tracks: remuxed_tracks(&selected),
+        preserved: preserved_boxes(primary, plan.keep_udta, &unknown),
+        wide_offsets: wide,
+        chunks: u32::try_from(chunks.len()).unwrap_or(u32::MAX),
+        renumbered,
+        references_dropped,
+    })
+}
+
+/// The boxes carried across as bytes, in output order.
+fn preserved_boxes(primary: &Container, keep_udta: bool, unknown: &[&BoxRange]) -> Vec<PreservedBox> {
     let mut preserved = Vec::new();
-    if plan.keep_udta {
+    if keep_udta {
         for child in primary.udta_children() {
             preserved.push(PreservedBox {
                 kind: child.kind,
@@ -246,15 +267,19 @@ pub fn remux(
             });
         }
     }
-    for range in &unknown {
+    for range in unknown {
         preserved.push(PreservedBox {
             kind: range.kind,
             size: range.size,
             placement: Placement::TopLevel,
         });
     }
+    preserved
+}
 
-    let tracks = selected
+/// Every kept track as the report describes it, in output order.
+fn remuxed_tracks(selected: &[Selected<'_>]) -> Vec<RemuxedTrack> {
+    selected
         .iter()
         .enumerate()
         .map(|(output_index, slot)| RemuxedTrack {
@@ -266,16 +291,98 @@ pub fn remux(
             samples: u32::try_from(slot.samples.len()).unwrap_or(u32::MAX),
             bytes: slot.samples.iter().map(|sample| u64::from(sample.size)).sum(),
         })
-        .collect();
+        .collect()
+}
 
-    Ok(RemuxReport {
-        bytes_written: written.bytes,
-        tracks,
-        preserved,
-        wide_offsets: wide,
-        chunks: u32::try_from(chunks.len()).unwrap_or(u32::MAX),
-        renumbered,
-    })
+/// Copies one top-level box of the primary input to the output: from the bytes the reader held when it
+/// held them, and otherwise from the source in bounded pieces, so a large unknown box is carried across
+/// without being read whole.
+fn copy_box(
+    inputs: &mut [Input<'_>],
+    primary: &Container,
+    range: &BoxRange,
+    out: &mut dyn Write,
+) -> Result<(), Error> {
+    if let Some(bytes) = primary.bytes_of(range) {
+        out.write_all(bytes)?;
+        return Ok(());
+    }
+    let input = inputs.first_mut().ok_or(Error::NothingSelected)?;
+    let mut offset = range.offset;
+    let end = range.offset.saturating_add(range.size);
+    while offset < end {
+        let piece = usize::try_from((end - offset).min(COPY_BUFFER)).map_err(|_| Error::NotHeld {
+            kind: range.kind,
+            offset: range.offset,
+        })?;
+        let bytes = input.source.read_range(offset, piece)?;
+        out.write_all(&bytes)?;
+        offset = offset.saturating_add(piece as u64);
+    }
+    Ok(())
+}
+
+/// The identifier every kept track has in the output, by input and by the identifier it had there.
+fn identifiers(selected: &[Selected<'_>]) -> BTreeMap<(usize, u32), u32> {
+    selected
+        .iter()
+        .map(|slot| ((slot.input, slot.track.tkhd.track_id), slot.track_id))
+        .collect()
+}
+
+/// What the movie box is laid out from: the same inputs for every pass.
+struct Layout<'a, 'c> {
+    primary: &'c Container,
+    selected: &'a [Selected<'c>],
+    chunks: &'a [Chunk],
+    ids: &'a BTreeMap<(usize, u32), u32>,
+    keep_udta: bool,
+    renumbered: bool,
+}
+
+impl Layout<'_, '_> {
+    /// How many track references point at a track the output does not hold, and are therefore dropped.
+    fn references_dropped(&self) -> Result<u32, Error> {
+        let mut dropped = 0u32;
+        for item in self.selected {
+            for child in &item.track.range.children {
+                if child.kind == b"tref" {
+                    dropped = dropped.saturating_add(references_box(item, child, self.ids)?.1);
+                }
+            }
+        }
+        Ok(dropped)
+    }
+}
+
+/// The track reference box of a kept track, rewritten for the output: every reference to a kept track
+/// carries that track's output identifier, every reference to a track the output does not hold is
+/// dropped, a reference type left with no target is dropped, and a box left with no reference type is
+/// dropped altogether. Returns the box, if one remains, and how many references were dropped.
+fn references_box(
+    item: &Selected<'_>,
+    tref: &BoxRange,
+    ids: &BTreeMap<(usize, u32), u32>,
+) -> Result<(Option<Vec<u8>>, u32), Error> {
+    let mut payload = Vec::new();
+    let mut dropped = 0u32;
+    for reference in &tref.children {
+        let bytes = held(item.container, reference)?;
+        let targets = bytes.get(usize::from(reference.header)..).unwrap_or(&[]);
+        let mut kept = Vec::new();
+        for target in targets.as_chunks::<4>().0 {
+            let source_id = u32::from_be_bytes(*target);
+            match ids.get(&(item.input, source_id)) {
+                Some(new_id) => kept.extend_from_slice(&new_id.to_be_bytes()),
+                None => dropped = dropped.saturating_add(1),
+            }
+        }
+        if !kept.is_empty() {
+            payload.extend_from_slice(&boxed(reference.kind.bytes(), &kept));
+        }
+    }
+    let remaining = (!payload.is_empty()).then(|| boxed(*b"tref", &payload));
+    Ok((remaining, dropped))
 }
 
 /// A writer that counts what passes through it.
@@ -469,15 +576,15 @@ fn boxed(kind: [u8; 4], payload: &[u8]) -> Vec<u8> {
 /// The movie box of the output: the primary's children in their order, with the kept tracks written
 /// where the primary's first track stood, the dropped tracks left out, and the user-data box kept or not
 /// as the plan says.
-fn movie_box(
-    primary: &Container,
-    selected: &[Selected<'_>],
-    chunks: &[Chunk],
-    keep_udta: bool,
-    renumbered: bool,
-    wide: bool,
-    media_start: u64,
-) -> Result<Vec<u8>, Error> {
+fn movie_box(layout: &Layout<'_, '_>, wide: bool, media_start: u64) -> Result<Vec<u8>, Error> {
+    let Layout {
+        primary,
+        selected,
+        chunks,
+        ids,
+        keep_udta,
+        renumbered,
+    } = *layout;
     let offsets = chunk_offsets(selected, chunks, media_start);
     let mut payload = Vec::new();
     let mut tracks_written = false;
@@ -502,7 +609,7 @@ fn movie_box(
                 if !tracks_written {
                     for (slot, item) in selected.iter().enumerate() {
                         let offsets = offsets.get(slot).map_or(&[][..], Vec::as_slice);
-                        payload.extend_from_slice(&track_box(item, offsets, wide, renumbered)?);
+                        payload.extend_from_slice(&track_box(item, offsets, wide, renumbered, ids)?);
                     }
                     tracks_written = true;
                 }
@@ -538,9 +645,16 @@ fn chunk_offsets(selected: &[Selected<'_>], chunks: &[Chunk], media_start: u64) 
         .collect()
 }
 
-/// A kept track: its box with every child copied, except the chunk offset table, which is rebuilt, and
-/// the track header's identifier, which is patched when tracks were renumbered.
-fn track_box(item: &Selected<'_>, offsets: &[u64], wide: bool, renumbered: bool) -> Result<Vec<u8>, Error> {
+/// A kept track: its box with every child copied, except the chunk offset table, which is rebuilt, the
+/// track header's identifier, which is patched when tracks were renumbered, and the track references,
+/// which are rewritten to the output's identifiers.
+fn track_box(
+    item: &Selected<'_>,
+    offsets: &[u64],
+    wide: bool,
+    renumbered: bool,
+    ids: &BTreeMap<(usize, u32), u32>,
+) -> Result<Vec<u8>, Error> {
     let mut payload = Vec::new();
     for child in &item.track.range.children {
         match &child.kind.bytes() {
@@ -551,6 +665,11 @@ fn track_box(item: &Selected<'_>, offsets: &[u64], wide: bool, renumbered: bool)
                     patch_u32(&mut bytes, at, item.track_id);
                 }
                 payload.extend_from_slice(&bytes);
+            },
+            b"tref" => {
+                if let (Some(bytes), _) = references_box(item, child, ids)? {
+                    payload.extend_from_slice(&bytes);
+                }
             },
             b"mdia" => payload.extend_from_slice(&rebuilt(item.container, child, offsets, wide)?),
             _ => payload.extend_from_slice(held(item.container, child)?),

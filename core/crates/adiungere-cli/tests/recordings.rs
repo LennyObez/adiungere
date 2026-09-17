@@ -439,3 +439,108 @@ fn export_joins_two_recordings_into_one_two_track_file() {
     let inspected = run(&["inspect", joined.to_str().unwrap()]).unwrap();
     assert!(out(&inspected).contains("3 track(s)"), "{}", out(&inspected));
 }
+
+#[test]
+fn export_refuses_to_write_over_a_recording_it_reads_under_any_spelling_of_the_path() {
+    // Arrange
+    let directory = Temporary::new("export-overwrite");
+    let clip = write_reference_like(directory.path(), "20260604_122323E.MP4").unwrap();
+    let bytes_before = std::fs::read(&clip).unwrap();
+    let modified_before = std::fs::metadata(&clip).unwrap().modified().unwrap();
+    let relative = directory
+        .path()
+        .join("..")
+        .join(directory.path().file_name().unwrap())
+        .join("20260604_122323E.MP4");
+    let elsewhere = directory.path().join("out.mp4");
+
+    // Act
+    let as_output = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        relative.to_str().unwrap(),
+    ])
+    .unwrap();
+    let as_manifest = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        elsewhere.to_str().unwrap(),
+        "--manifest",
+        relative.to_str().unwrap(),
+    ])
+    .unwrap();
+
+    // Assert
+    assert_eq!(as_output.status.code(), Some(2));
+    assert!(
+        err(&as_output).contains("nothing was written"),
+        "{}",
+        err(&as_output)
+    );
+    assert_eq!(as_manifest.status.code(), Some(2));
+    assert!(
+        err(&as_manifest).contains("nothing was written"),
+        "{}",
+        err(&as_manifest)
+    );
+    assert_eq!(std::fs::read(&clip).unwrap(), bytes_before);
+    assert_eq!(
+        std::fs::metadata(&clip).unwrap().modified().unwrap(),
+        modified_before
+    );
+    assert!(!elsewhere.exists());
+    assert!(!directory.path().join("20260604_122323E.part").exists());
+    assert!(!directory.path().join("out.part").exists());
+}
+
+#[test]
+fn export_says_how_many_track_references_it_left_out() {
+    // Arrange
+    let directory = Temporary::new("export-references");
+    let spec = corpus()
+        .into_iter()
+        .find(|spec| spec.quirks.track_references)
+        .unwrap();
+    let clip = directory.path().join("20260604_122323E.MP4");
+    build(&spec).unwrap().write_to(&clip).unwrap();
+    let out_path = directory.path().join("rear.mp4");
+
+    // Act
+    let output = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        out_path.to_str().unwrap(),
+    ])
+    .unwrap();
+    let as_json = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "both",
+        "--out",
+        directory.path().join("both.mp4").to_str().unwrap(),
+        "--format",
+        "json",
+    ])
+    .unwrap();
+
+    // Assert
+    assert_eq!(output.status.code(), Some(0), "{}", err(&output));
+    assert!(
+        out(&output).contains("1 track reference(s) named a track this file does not hold"),
+        "{}",
+        out(&output)
+    );
+    assert_eq!(as_json.status.code(), Some(0), "{}", err(&as_json));
+    let json: serde_json::Value = serde_json::from_str(&out(&as_json)).unwrap();
+    assert_eq!(json["report"]["references_dropped"], 0);
+}

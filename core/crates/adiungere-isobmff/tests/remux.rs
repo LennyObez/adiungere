@@ -745,3 +745,177 @@ fn a_join_of_one_track_from_each_file_writes_the_next_identifier_after_its_two_t
         vec![1, 2]
     );
 }
+
+/// One track's references: each reference type with the identifiers it names, or nothing for a track
+/// without a reference box.
+type References = Option<Vec<(String, Vec<u32>)>>;
+
+/// The track references of every track of a recording, in track order.
+fn references_of(bytes: &[u8]) -> Result<Vec<References>, Error> {
+    let container = parsed(bytes)?;
+    let mut all = Vec::new();
+    for track in container.tracks()? {
+        let Some(tref) = track.range.descend(&[b"tref"]) else {
+            all.push(None);
+            continue;
+        };
+        let mut references = Vec::new();
+        for reference in &tref.children {
+            let payload = container
+                .bytes_of(reference)
+                .and_then(|bytes| bytes.get(usize::from(reference.header)..))
+                .unwrap_or(&[]);
+            let ids = payload
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|id| u32::from_be_bytes(*id))
+                .collect();
+            references.push((reference.kind.to_string(), ids));
+        }
+        all.push(Some(references));
+    }
+    Ok(all)
+}
+
+#[test]
+fn track_references_follow_the_tracks_they_name_and_leave_with_them() {
+    // The rear track of this recording depends on the front track and describes the audio track.
+
+    // Arrange
+    let spec = corpus()
+        .into_iter()
+        .find(|spec| spec.quirks.track_references)
+        .unwrap();
+    let original = build(&spec).unwrap().bytes().unwrap();
+    assert_eq!(
+        references_of(&original).unwrap(),
+        vec![
+            None,
+            Some(vec![("vdep".to_owned(), vec![1]), ("cdsc".to_owned(), vec![3])]),
+            None
+        ]
+    );
+
+    // Act
+    let (whole, whole_report) = extract(&original, &[0, 1, 2]).unwrap();
+    let (rear_and_audio, rear_report) = extract(&original, &[1, 2]).unwrap();
+    let (rear_alone, alone_report) = extract(&original, &[1]).unwrap();
+
+    // Assert
+    assert_eq!(references_of(&whole).unwrap(), references_of(&original).unwrap());
+    assert_eq!(whole_report.references_dropped, 0);
+    assert_eq!(
+        references_of(&rear_and_audio).unwrap(),
+        vec![Some(vec![("cdsc".to_owned(), vec![3])]), None],
+        "the reference to the dropped front track leaves with it"
+    );
+    assert_eq!(rear_report.references_dropped, 1);
+    assert_eq!(
+        references_of(&rear_alone).unwrap(),
+        vec![None],
+        "a reference box left with nothing to name is dropped"
+    );
+    assert_eq!(alone_report.references_dropped, 2);
+    assert!(parsed(&rear_alone).unwrap().ranges_tile_the_file());
+}
+
+#[test]
+fn a_join_rewrites_the_references_to_the_identifiers_the_output_gives() {
+    // Arrange
+    let spec = corpus()
+        .into_iter()
+        .find(|spec| spec.quirks.track_references)
+        .unwrap();
+    let first_file = build(&spec).unwrap().bytes().unwrap();
+    let second_file = build(&spec).unwrap().bytes().unwrap();
+    let mut first_source = SliceSource::new(&first_file);
+    let mut second_source = SliceSource::new(&second_file);
+    let first = parse(&mut first_source).unwrap();
+    let second = parse(&mut second_source).unwrap();
+    let mut inputs = [
+        Input {
+            container: &first,
+            source: &mut first_source,
+            tracks: vec![0],
+        },
+        Input {
+            container: &second,
+            source: &mut second_source,
+            tracks: vec![2, 1],
+        },
+    ];
+    let mut out = Vec::new();
+
+    // Act
+    let report = remux(&mut inputs, &RemuxPlan::default(), &mut out, &mut |_| true).unwrap();
+
+    // Assert: the second file's audio became track 2 and its rear track 3; the rear's reference to its
+    // own file's front track, which is not in the output, is gone, and its reference to the audio
+    // names that track's new identifier.
+    assert_eq!(
+        report
+            .tracks
+            .iter()
+            .map(|t| (t.input, t.source_track_id, t.track_id))
+            .collect::<Vec<_>>(),
+        vec![(0, 1, 1), (1, 3, 2), (1, 2, 3)]
+    );
+    assert_eq!(
+        references_of(&out).unwrap(),
+        vec![None, None, Some(vec![("cdsc".to_owned(), vec![2])])]
+    );
+    assert_eq!(report.references_dropped, 1);
+}
+
+#[test]
+fn an_unknown_top_level_box_too_large_to_hold_is_still_carried_across() {
+    // The reader keeps the bytes of an unknown box only up to a cap; a larger one is a range the writer
+    // has to copy from the source, in pieces, rather than refuse.
+
+    // Arrange
+    let mut original = build(&Spec::reference_like()).unwrap().bytes().unwrap();
+    let payload: Vec<u8> = (0..(3u32 << 19)).map(|i| (i % 251) as u8).collect();
+    let mut big = Vec::new();
+    big.extend_from_slice(&u32::try_from(payload.len() + 8).unwrap().to_be_bytes());
+    big.extend_from_slice(b"abcd");
+    big.extend_from_slice(&payload);
+    original.extend_from_slice(&big);
+    let before = parsed(&original).unwrap();
+    let held = before
+        .unknown_top_level()
+        .iter()
+        .map(|range| (range.kind.to_string(), before.bytes_of(range).is_some()))
+        .collect::<Vec<_>>();
+
+    // Act
+    let (out, report) = extract(&original, &[0, 1, 2]).unwrap();
+
+    // Assert
+    assert_eq!(
+        held,
+        vec![("zzzz".to_owned(), true), ("abcd".to_owned(), false)],
+        "the large box is a range without bytes in the reader"
+    );
+    let container = parsed(&out).unwrap();
+    let kinds: Vec<String> = container
+        .top_level()
+        .iter()
+        .map(|range| range.kind.to_string())
+        .collect();
+    assert_eq!(kinds, vec!["ftyp", "moov", "zzzz", "abcd", "mdat"]);
+    let carried = container
+        .unknown_top_level()
+        .into_iter()
+        .find(|range| range.kind == b"abcd")
+        .unwrap();
+    let start = usize::try_from(carried.offset).unwrap();
+    assert_eq!(out.get(start..start + big.len()), Some(big.as_slice()));
+    assert!(
+        report
+            .preserved
+            .iter()
+            .any(|b| b.kind == b"abcd" && b.size == big.len() as u64)
+    );
+    assert!(container.ranges_tile_the_file());
+}

@@ -105,10 +105,11 @@ rear-only file plays in the gallery applications of Windows and of one phone pla
       is at hand, and does not hold the milestone
 
 The writer copies the recorder's boxes as the ranges the reader found them in and rebuilds only the chunk
-offset tables, so the sample description entries, the edit lists and the vendor boxes reach the output as
-the bytes they were. The export refuses its own output when a track read back does not carry its source's
-fingerprint, and removes it. The demonstration of this milestone has two halves: the reference recording's
-rear-only export carried the telemetry box and the model code byte for byte, decoded without a complaint
+offset tables and the track references, so the sample description entries, the edit lists and the vendor
+boxes reach the output as the bytes they were, and nothing in the output names a track that is not there.
+The export refuses its own output when a track read back does not carry its source's fingerprint, and
+removes it. The demonstration of this milestone has two halves: the reference recording's rear-only
+export carried the telemetry box and the model code byte for byte, decoded without a complaint
 under the pinned media tool with the same packet counts, and verified identical on every subject; the
 gallery half is a person playing that file, recorded in P40 for Windows and an iPhone. The line first
 named Android as the phone platform; it was measured on an iPhone because that was the phone at hand, and

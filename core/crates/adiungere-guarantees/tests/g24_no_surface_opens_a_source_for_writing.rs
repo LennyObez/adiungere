@@ -191,3 +191,53 @@ fn every_command_leaves_the_recording_it_is_given_exactly_as_it_was() {
     }
     assert!(before.1 == stamp, "the stamp was set and read back");
 }
+
+#[test]
+fn an_export_asked_to_write_over_its_source_refuses_and_leaves_it_as_it_was() {
+    // The one command that writes must not be talked into writing where it reads, by the output path,
+    // by the partial file's path or by the manifest's path, under another spelling of the same file.
+
+    // Arrange
+    let directory = Temporary::new("overwrite");
+    let clip = directory.0.join("20260604_122323E.MP4");
+    build(&Spec::reference_like()).unwrap().write_to(&clip).unwrap();
+    let before = state_of(&clip);
+    let files = [clip.clone()];
+    let stop = AtomicBool::new(false);
+    let same_by_another_route = directory
+        .0
+        .join("..")
+        .join(directory.0.file_name().unwrap_or_default())
+        .join("20260604_122323E.MP4");
+    let elsewhere = directory.0.join("out.mp4");
+
+    // Act
+    let as_output = media::export(
+        &files,
+        &Selection::Rear,
+        &same_by_another_route,
+        None,
+        Output::Json,
+        &stop,
+    );
+    let as_manifest = media::export(
+        &files,
+        &Selection::Rear,
+        &elsewhere,
+        Some(&same_by_another_route),
+        Output::Json,
+        &stop,
+    );
+
+    // Assert
+    assert!(
+        matches!(as_output, Err(MediaFailure::Overwrite { .. })),
+        "{as_output:?}"
+    );
+    assert!(
+        matches!(as_manifest, Err(MediaFailure::Overwrite { .. })),
+        "{as_manifest:?}"
+    );
+    assert_eq!(state_of(&clip), before, "the recording was changed");
+    assert!(!elsewhere.exists(), "nothing was written before the refusal");
+}

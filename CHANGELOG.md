@@ -103,7 +103,15 @@ because one repository publishes several things.
 - Six further guarantees enforced, each watched failing: every export preserves the recorder; the same
   input writes the same bytes everywhere; an independent parser reads the same samples; no surface opens a
   source for writing; the stream copy links no encoder; the detector raises every sign on the corpus.
-- Probe P40 for the half of the extraction demonstration no pipeline can run: the rear-only export
-  played in the gallery applications of Windows and Android.
+- Probe P40 for the half of the extraction demonstration no pipeline can run: the rear-only export of
+  the reference recording played in full in the gallery application of Windows and on an iPhone; an
+  Android gallery joins the probe when a device is at hand.
+- Track references follow the tracks they name: an export rewrites them to the output's identifiers and
+  leaves out those naming a track the output does not hold, and says how many it left out. An unknown
+  top-level box larger than the reader holds is copied from the source in pieces rather than refused.
+  An export refuses, before writing a byte, any output, partial or manifest path that names one of its
+  sources under any spelling. The output read back is held to its sources' decoder configuration digest
+  as well as their sample digest.
+- The corpus gains a recording whose rear track references the front and the audio tracks.
 
 [Unreleased]: https://github.com/LennyObez/adiungere/commits/main

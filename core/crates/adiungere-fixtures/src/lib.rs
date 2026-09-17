@@ -88,6 +88,10 @@ pub struct Quirks {
     pub edit_list: bool,
     /// Whether the front video sample entry carries an unknown child box after its configuration.
     pub unknown_child_in_entry: bool,
+    /// Whether the rear track carries a track reference box naming the front track as what it depends
+    /// on and the audio track as what it describes, so that an export dropping either has references
+    /// to rewrite or to drop.
+    pub track_references: bool,
 }
 
 /// How samples are grouped into chunks.
@@ -148,6 +152,7 @@ impl Spec {
             quirks: Quirks {
                 edit_list: false,
                 unknown_child_in_entry: false,
+                track_references: false,
             },
             compressor: "synthetic pattern",
             chunking: Chunking { video: 15, audio: 22 },
@@ -244,6 +249,14 @@ pub fn corpus() -> Vec<Spec> {
         Spec {
             name: "capped",
             declared_size: 32,
+            ..base.clone()
+        },
+        Spec {
+            name: "track-references",
+            quirks: Quirks {
+                track_references: true,
+                ..base.quirks
+            },
             ..base
         },
     ]
@@ -1146,8 +1159,23 @@ fn build_trak(spec: &Spec, plan: &Plan, chunk_offsets: &[u64], media_base: u64) 
     if let Some(edts) = edts {
         children.push(edts);
     }
+    if let Some(tref) = track_references(spec, plan) {
+        children.push(tref);
+    }
     children.push(mdia);
     container(*b"trak", &children)
+}
+
+/// The rear track's references, when the recording carries them: it depends on the front track and
+/// describes the audio track, by the identifiers those tracks have in this recording.
+fn track_references(spec: &Spec, plan: &Plan) -> Option<Vec<u8>> {
+    if !spec.quirks.track_references || plan.role != Role::Rear {
+        return None;
+    }
+    let front = boxed(*b"vdep", &Fields::new().u32(1).finish());
+    let audio_id = if spec.tracks.audio { 3 } else { 1 };
+    let audio = boxed(*b"cdsc", &Fields::new().u32(audio_id).finish());
+    Some(container(*b"tref", &[front, audio]))
 }
 
 #[cfg(test)]
