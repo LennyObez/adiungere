@@ -424,6 +424,15 @@ struct Head {
     total: u64,
 }
 
+impl Head {
+    fn new() -> Self {
+        Self {
+            kept: Vec::new(),
+            total: 0,
+        }
+    }
+}
+
 impl std::io::Write for Head {
     fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
         let room = (1 << 20) - self.kept.len().min(1 << 20);
@@ -438,36 +447,36 @@ impl std::io::Write for Head {
     }
 }
 
+/// The reference-like recording with every sample of every track declared at one size, which the sample
+/// size tables' constant-size field states in one place per track.
+fn declared_at(sample_size: u32) -> Result<Vec<u8>, Error> {
+    let original = build(&Spec::reference_like())
+        .map_err(|_| Error::NothingSelected)?
+        .bytes()
+        .ok_or(Error::NothingSelected)?;
+    let mut patched = original.clone();
+    let container = parsed(&original)?;
+    for track in container.tracks()? {
+        let table = track
+            .range
+            .descend(&[b"mdia", b"minf", b"stbl", b"stsz"])
+            .ok_or(Error::NothingSelected)?
+            .payload_offset();
+        let at = usize::try_from(table).map_err(|_| Error::NothingSelected)? + 4;
+        patched
+            .get_mut(at..at + 4)
+            .ok_or(Error::NothingSelected)?
+            .copy_from_slice(&sample_size.to_be_bytes());
+    }
+    Ok(patched)
+}
+
 #[test]
 fn media_past_four_gibibytes_gets_wide_offsets_and_a_large_media_data_box() {
     // Arrange: every sample of every track declared as sixty-four mebibytes, in a source that serves
     // zeros there; a hundred and five of them end well past four gibibytes.
-    let original = build(&Spec::reference_like()).unwrap().bytes().unwrap();
-    let mut patched = original.clone();
-    let size_tables: Vec<u64> = {
-        let container = parsed(&original).unwrap();
-        container
-            .tracks()
-            .unwrap()
-            .iter()
-            .map(|track| {
-                track
-                    .range
-                    .descend(&[b"mdia", b"minf", b"stbl", b"stsz"])
-                    .unwrap()
-                    .payload_offset()
-            })
-            .collect()
-    };
-    for table in size_tables {
-        let at = usize::try_from(table).unwrap() + 4;
-        patched
-            .get_mut(at..at + 4)
-            .unwrap()
-            .copy_from_slice(&(64u32 << 20).to_be_bytes());
-    }
     let mut source = Stretched {
-        header: patched,
+        header: declared_at(64 << 20).unwrap(),
         length: 1 << 40,
     };
     let container = parse(&mut source).unwrap();
@@ -476,10 +485,7 @@ fn media_past_four_gibibytes_gets_wide_offsets_and_a_large_media_data_box() {
         source: &mut source,
         tracks: vec![0, 1, 2],
     }];
-    let mut sink = Head {
-        kept: Vec::new(),
-        total: 0,
-    };
+    let mut sink = Head::new();
 
     // Act
     let report = remux(&mut inputs, &RemuxPlan::default(), &mut sink, &mut |_| true).unwrap();
@@ -513,5 +519,229 @@ fn media_past_four_gibibytes_gets_wide_offsets_and_a_large_media_data_box() {
         nth(&tracks, 0).unwrap().table.chunk_offsets.len(),
         2,
         "the front track keeps its two chunks"
+    );
+}
+
+/// A source that counts how many times it is asked for bytes.
+struct Counted<S> {
+    inner: S,
+    requests: u32,
+}
+
+impl<S: Source> Source for Counted<S> {
+    fn length(&mut self) -> Result<u64, SourceError> {
+        self.inner.length()
+    }
+
+    fn read_at(&mut self, offset: u64, into: &mut [u8]) -> Result<(), SourceError> {
+        self.requests += 1;
+        self.inner.read_at(offset, into)
+    }
+}
+
+/// The most media the remuxer reads in one request: a chunk stored in one run and no larger than this is
+/// one request, anything else is one request per sample.
+const COPY_BUFFER: u64 = 16 << 20;
+
+/// What a remux of every track asked its source, against what the chunk sizes say it should have asked:
+/// the requests made, the requests expected, the largest chunk in bytes and the smallest.
+struct Requests {
+    made: u32,
+    expected: u32,
+    chunks: u32,
+    largest_chunk: u64,
+    smallest_chunk: u64,
+}
+
+fn requests_of<S: Source>(source: S) -> Result<Requests, Error> {
+    let mut counted = Counted {
+        inner: source,
+        requests: 0,
+    };
+    let container = parse(&mut counted)?;
+    let mut chunks: Vec<(u64, u32)> = Vec::new();
+    for track in container.tracks()? {
+        let mut current: Option<(u32, u64, u32)> = None;
+        for sample in track.table.samples()? {
+            match current.as_mut() {
+                Some((chunk, bytes, count)) if *chunk == sample.chunk => {
+                    *bytes += u64::from(sample.size);
+                    *count += 1;
+                },
+                _ => {
+                    if let Some((_, bytes, count)) = current.take() {
+                        chunks.push((bytes, count));
+                    }
+                    current = Some((sample.chunk, u64::from(sample.size), 1));
+                },
+            }
+        }
+        if let Some((_, bytes, count)) = current.take() {
+            chunks.push((bytes, count));
+        }
+    }
+    let expected = chunks
+        .iter()
+        .map(|(bytes, count)| if *bytes <= COPY_BUFFER { 1 } else { *count })
+        .sum();
+    counted.requests = 0;
+    let mut inputs = [Input {
+        container: &container,
+        source: &mut counted,
+        tracks: vec![0, 1, 2],
+    }];
+    remux(&mut inputs, &RemuxPlan::default(), &mut Head::new(), &mut |_| {
+        true
+    })?;
+    Ok(Requests {
+        made: counted.requests,
+        expected,
+        chunks: u32::try_from(chunks.len()).unwrap_or(u32::MAX),
+        largest_chunk: chunks.iter().map(|(bytes, _)| *bytes).max().unwrap_or(0),
+        smallest_chunk: chunks.iter().map(|(bytes, _)| *bytes).min().unwrap_or(0),
+    })
+}
+
+#[test]
+fn a_chunk_stored_in_one_run_is_read_in_one_request_up_to_the_copy_buffer() {
+    // The recorder stores the samples of a chunk back to back, so the copy asks the source once per
+    // chunk and not once per sample, up to the sixteen mebibytes the copy buffer holds; a larger chunk is
+    // read sample by sample, so no chunk a hostile file declares decides how much memory is allocated.
+    // Three recordings: the small one, one whose chunks lie between one and sixteen mebibytes, and one
+    // whose chunks all lie past the buffer.
+
+    // Arrange
+    let original = build(&Spec::reference_like()).unwrap().bytes().unwrap();
+    let within_the_buffer = Stretched {
+        header: declared_at(256 << 10).unwrap(),
+        length: 1 << 30,
+    };
+    let past_the_buffer = Stretched {
+        header: declared_at(8 << 20).unwrap(),
+        length: 1 << 34,
+    };
+
+    // Act
+    let small = requests_of(SliceSource::new(&original)).unwrap();
+    let mid = requests_of(within_the_buffer).unwrap();
+    let large = requests_of(past_the_buffer).unwrap();
+
+    // Assert
+    assert!(small.largest_chunk < 1 << 20, "{}", small.largest_chunk);
+    assert_eq!(small.made, small.expected, "one request per small chunk");
+    assert!(
+        mid.largest_chunk > 1 << 20 && mid.largest_chunk <= COPY_BUFFER,
+        "{} to {}",
+        mid.smallest_chunk,
+        mid.largest_chunk
+    );
+    assert_eq!(mid.made, mid.expected, "one request per chunk within the buffer");
+    assert!(large.largest_chunk > COPY_BUFFER, "{}", large.largest_chunk);
+    assert!(
+        large.expected > large.chunks,
+        "at least one chunk is read sample by sample"
+    );
+    assert_eq!(
+        large.made, large.expected,
+        "one request per sample past the buffer"
+    );
+}
+
+/// A sink that accepts every byte and refuses to flush.
+struct Unflushable;
+
+impl std::io::Write for Unflushable {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("the device is gone"))
+    }
+}
+
+#[test]
+fn a_sink_that_cannot_flush_fails_the_remux_rather_than_reporting_it_written() {
+    // Arrange
+    let original = build(&Spec::reference_like()).unwrap().bytes().unwrap();
+    let mut source = SliceSource::new(&original);
+    let container = parse(&mut source).unwrap();
+    let mut inputs = [Input {
+        container: &container,
+        source: &mut source,
+        tracks: vec![0, 2],
+    }];
+
+    // Act
+    let outcome = remux(&mut inputs, &RemuxPlan::default(), &mut Unflushable, &mut |_| {
+        true
+    });
+
+    // Assert
+    assert!(
+        matches!(outcome, Err(Error::Write(ref cause)) if cause.to_string() == "the device is gone"),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn an_input_prints_its_tracks_and_not_its_source() {
+    // Arrange
+    let original = build(&Spec::reference_like()).unwrap().bytes().unwrap();
+    let mut source = SliceSource::new(&original);
+    let container = parse(&mut source).unwrap();
+    let input = Input {
+        container: &container,
+        source: &mut source,
+        tracks: vec![0, 2],
+    };
+
+    // Act
+    let printed = format!("{input:?}");
+
+    // Assert
+    assert_eq!(printed, "Input { tracks: [0, 2], .. }");
+}
+
+#[test]
+fn a_join_of_one_track_from_each_file_writes_the_next_identifier_after_its_two_tracks() {
+    // The sources both say the next identifier is four; the output has two tracks and says three.
+
+    // Arrange
+    let first_file = build(&Spec::reference_like()).unwrap().bytes().unwrap();
+    let second_file = build(&Spec::reference_like()).unwrap().bytes().unwrap();
+    let mut first_source = SliceSource::new(&first_file);
+    let mut second_source = SliceSource::new(&second_file);
+    let first = parse(&mut first_source).unwrap();
+    let second = parse(&mut second_source).unwrap();
+    assert_eq!(first.mvhd().unwrap().next_track_id, 4);
+    let mut inputs = [
+        Input {
+            container: &first,
+            source: &mut first_source,
+            tracks: vec![0],
+        },
+        Input {
+            container: &second,
+            source: &mut second_source,
+            tracks: vec![1],
+        },
+    ];
+    let mut out = Vec::new();
+
+    // Act
+    remux(&mut inputs, &RemuxPlan::default(), &mut out, &mut |_| true).unwrap();
+
+    // Assert
+    let container = parsed(&out).unwrap();
+    assert_eq!(container.mvhd().unwrap().next_track_id, 3);
+    assert_eq!(
+        container
+            .tracks()
+            .unwrap()
+            .iter()
+            .map(|track| track.tkhd.track_id)
+            .collect::<Vec<_>>(),
+        vec![1, 2]
     );
 }

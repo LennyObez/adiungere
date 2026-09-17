@@ -708,6 +708,10 @@ fn the_error_messages_name_the_box_and_the_offset() {
         .is_some()
     );
     assert!(std::error::Error::source(&Error::NoMovieBox).is_none());
+    assert!(
+        std::error::Error::source(&Error::Write(std::io::Error::other("full")))
+            .is_some_and(|cause| cause.to_string() == "full")
+    );
 }
 
 #[test]

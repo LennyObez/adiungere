@@ -193,7 +193,7 @@ pub fn remux(
         .collect::<Result<Vec<&[u8]>, Error>>()?;
     let before_moov = ftyp.map_or(0, |bytes| bytes.len() as u64);
     let after_moov: u64 = unknown_bytes.iter().map(|bytes| bytes.len() as u64).sum();
-    let large_mdat = media.saturating_add(8) > u64::from(u32::MAX);
+    let large_mdat = needs_large_header(media);
     let mdat_header: u64 = if large_mdat { 16 } else { 8 };
 
     // The movie box is laid out twice at most: once to learn its size with narrow offsets, and again
@@ -203,7 +203,7 @@ pub fn remux(
     let keep_udta = plan.keep_udta;
     let mut wide = false;
     let narrow_moov = movie_box(primary, &selected, &chunks, keep_udta, renumbered, wide, 0)?;
-    if media_start(narrow_moov.len() as u64).saturating_add(media) > u64::from(u32::MAX) {
+    if !fits_narrow_offsets(media_start(narrow_moov.len() as u64).saturating_add(media)) {
         wide = true;
     }
     let sized_moov = movie_box(primary, &selected, &chunks, keep_udta, renumbered, wide, 0)?;
@@ -373,14 +373,31 @@ fn interleave(selected: &[Selected<'_>]) -> Vec<Chunk> {
             start = start.saturating_add(count);
         }
     }
-    // Times are compared as fractions, so tracks with different timescales interleave exactly and no
-    // rounding decides an order. The sort is stable, so ties keep track order, then chunk order.
-    chunks.sort_by(|a, b| {
-        let left = u128::from(a.time) * u128::from(b.timescale.max(1));
-        let right = u128::from(b.time) * u128::from(a.timescale.max(1));
-        left.cmp(&right).then(a.slot.cmp(&b.slot))
-    });
+    // The sort is stable, so ties keep track order, then chunk order.
+    chunks.sort_by(earlier);
     chunks
+}
+
+/// Which of two chunks the output stores first: the one whose first sample decodes earlier, then the one
+/// of the earlier track. Times are compared as fractions, so tracks with different timescales interleave
+/// exactly and no rounding decides an order.
+fn earlier(a: &Chunk, b: &Chunk) -> std::cmp::Ordering {
+    let left = u128::from(a.time) * u128::from(b.timescale.max(1));
+    let right = u128::from(b.time) * u128::from(a.timescale.max(1));
+    left.cmp(&right).then(a.slot.cmp(&b.slot))
+}
+
+/// The largest position a narrow, 32-bit, size or offset can hold.
+const NARROW_LIMIT: u64 = 0xFFFF_FFFF;
+
+/// Whether a box with this payload needs the long header, because its size would not fit the short one.
+const fn needs_large_header(payload: u64) -> bool {
+    payload.saturating_add(8) > NARROW_LIMIT
+}
+
+/// Whether media ending at this position can be addressed by narrow chunk offsets.
+const fn fits_narrow_offsets(end: u64) -> bool {
+    end <= NARROW_LIMIT
 }
 
 /// Copies one chunk from its input to the output, through a bounded buffer.
@@ -443,7 +460,7 @@ fn box_header(kind: [u8; 4], payload: u64, large: bool) -> Vec<u8> {
 
 /// A whole box: header and payload.
 fn boxed(kind: [u8; 4], payload: &[u8]) -> Vec<u8> {
-    let large = (payload.len() as u64).saturating_add(8) > u64::from(u32::MAX);
+    let large = needs_large_header(payload.len() as u64);
     let mut bytes = box_header(kind, payload.len() as u64, large);
     bytes.extend_from_slice(payload);
     bytes
@@ -618,5 +635,83 @@ fn next_track_id_offset(mvhd: &[u8]) -> usize {
         VERSION_ONE
     } else {
         VERSION_ZERO
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cmp::Ordering;
+
+    use super::{
+        Chunk, NARROW_LIMIT, earlier, fits_narrow_offsets, needs_large_header, next_track_id_offset,
+        track_id_offset,
+    };
+
+    fn chunk(slot: usize, time: u64, timescale: u32) -> Chunk {
+        Chunk {
+            slot,
+            first: 0,
+            count: 1,
+            bytes: 1,
+            time,
+            timescale,
+        }
+    }
+
+    #[test]
+    fn chunks_are_ordered_by_their_decode_time_as_fractions_and_then_by_track() {
+        // Every case is one where a sum, a quotient or a rounded comparison would give another order.
+        let cases = [
+            (chunk(0, 2, 1), chunk(1, 3, 2), Ordering::Greater),
+            (chunk(0, 3, 1), chunk(1, 7, 3), Ordering::Greater),
+            (chunk(0, 0, 5), chunk(1, 1, 10), Ordering::Less),
+            (chunk(0, 1, 2), chunk(1, 2, 4), Ordering::Less),
+            (chunk(1, 1, 2), chunk(0, 2, 4), Ordering::Greater),
+            (chunk(0, 100, 1000), chunk(1, 1, 2), Ordering::Less),
+        ];
+
+        for (a, b, expected) in cases {
+            assert_eq!(earlier(&a, &b), expected, "{a:?} against {b:?}");
+            assert_eq!(earlier(&b, &a), expected.reverse(), "{b:?} against {a:?}");
+        }
+    }
+
+    #[test]
+    fn a_zero_timescale_does_not_stop_the_ordering() {
+        assert_eq!(earlier(&chunk(0, 1, 0), &chunk(1, 2, 0)), Ordering::Less);
+    }
+
+    #[test]
+    fn the_long_header_starts_exactly_where_the_short_one_stops() {
+        assert!(!needs_large_header(NARROW_LIMIT - 8));
+        assert!(needs_large_header(NARROW_LIMIT - 7));
+        assert!(needs_large_header(u64::MAX));
+        assert!(!needs_large_header(0));
+    }
+
+    #[test]
+    fn narrow_offsets_reach_the_last_addressable_byte_and_not_one_further() {
+        assert!(fits_narrow_offsets(NARROW_LIMIT));
+        assert!(!fits_narrow_offsets(NARROW_LIMIT + 1));
+        assert!(fits_narrow_offsets(0));
+    }
+
+    #[test]
+    fn the_identifier_offsets_follow_the_header_version() {
+        let mut version_zero = vec![0u8; 120];
+        let mut version_one = vec![0u8; 120];
+        if let Some(byte) = version_one.get_mut(8) {
+            *byte = 1;
+        }
+        if let Some(byte) = version_zero.get_mut(8) {
+            *byte = 0;
+        }
+
+        assert_eq!(track_id_offset(&version_zero), 20);
+        assert_eq!(track_id_offset(&version_one), 28);
+        assert_eq!(next_track_id_offset(&version_zero), 104);
+        assert_eq!(next_track_id_offset(&version_one), 116);
+        assert_eq!(track_id_offset(&[]), 20);
+        assert_eq!(next_track_id_offset(&[]), 104);
     }
 }
