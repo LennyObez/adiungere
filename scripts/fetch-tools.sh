@@ -54,11 +54,23 @@ fetch_ffmpeg() {
 
     mkdir -p "$tools"
     archive="$tools/ffmpeg-$version.tar.xz"
+    # What an install records about itself: the archive digest it came from and the digest of the binary it
+    # left. A later run trusts the install only if both still match, so a pin that moved or a binary that
+    # changed under the same name is fetched again rather than accepted.
+    record="$tools/ffmpeg-$version.installed"
 
-    if [ -x "$tools/$binary" ]; then
-        printf 'fetch-tools: the media tool is already present at %s\n' "$tools/$binary"
-        return 0
+    if [ -x "$tools/$binary" ] && [ -f "$record" ]; then
+        recorded_archive=$(sed -n 1p "$record")
+        recorded_binary=$(sed -n 2p "$record")
+        current_binary=$(sha256sum "$tools/$binary" | cut -c1-64)
+        if [ "$recorded_archive" = "$digest" ] && [ "$recorded_binary" = "$current_binary" ]; then
+            printf 'fetch-tools: the media tool is already present at %s and matches its pin\n' \
+                "$tools/$binary"
+            return 0
+        fi
+        printf 'fetch-tools: the install at %s no longer matches its pin; fetching again\n' "$tools/$binary"
     fi
+    rm -rf "${tools:?}/${binary%%/*}" "$record"
 
     printf 'fetch-tools: fetching the media tool %s\n' "$version"
     curl --fail --silent --show-error --location --output "$archive" "$url"
@@ -78,6 +90,7 @@ fetch_ffmpeg() {
         printf 'fetch-tools: the archive did not contain %s\n' "$binary" >&2
         exit 1
     fi
+    printf '%s\n%s\n' "$digest" "$(sha256sum "$tools/$binary" | cut -c1-64)" > "$record"
 
     printf 'fetch-tools: %s\n' "$("$tools/$binary" -version | head -n 1)"
 }

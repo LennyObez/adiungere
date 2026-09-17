@@ -85,5 +85,9 @@ run 'evidence register agrees with the roadmap' \
 run 'the published site' "$root/scripts/check-site.sh"
 run 'shell scripts' shellcheck "$root"/scripts/*.sh
 run 'advisories, licences, sources and bans' cargo deny --manifest-path "$workspace" check
+# The fuzzing project is its own package, outside the workspace, with its own lock file: the same policy
+# applies to it, or its engine's licence goes unchecked.
+run 'the same policy over the fuzzing project' \
+    cargo deny --manifest-path "$root/core/fuzz/Cargo.toml" check --config "$root/core/deny.toml"
 
 printf '\nEvery step ran and every step passed. Output is in %s\n' "$output"

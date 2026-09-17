@@ -60,9 +60,12 @@ jobs:
           queries: security-extended
           # A recording is an input this product cannot trust, and it arrives from the local file system. The
           # default threat model treats only remote input as untrusted, which would make the box reader's
-          # entire attack surface invisible to the queries.
+          # entire attack surface invisible to the queries. The file contents are therefore a source. The
+          # command line and the environment are not: this is a tool that opens the file the person names,
+          # and whoever chooses that name already runs code as that person.
           config: |
-            threat-models: local
+            threat-models:
+              - file
 
       - name: Analyse
         uses: github/codeql-action/analyze@977e6ceaea7361825998245d787fa3b4d6b9e5df # codeql-bundle-v2.27.0
@@ -93,4 +96,9 @@ jobs:
           fail-on-severity: low
           allow-licenses: >-
             0BSD, Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-2-Clause, BSD-3-Clause, CC0-1.0, ISC, MIT,
-            MPL-2.0, Unicode-3.0, Zlib
+            MPL-2.0, NCSA, Unicode-3.0, Zlib
+          # The licence policy governs what the product links and ships. A pipeline action runs on the
+          # build machine and ships nothing, so an action under a reciprocal licence is exempted here by
+          # name, and a guarantee refuses any exemption that is not a pipeline action.
+          allow-dependencies-licenses: >-
+            pkg:githubactions/Swatinem/rust-cache

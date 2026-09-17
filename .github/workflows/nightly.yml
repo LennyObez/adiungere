@@ -131,7 +131,7 @@ jobs:
           workspaces: core
 
       # The recording is private: it carries satellite positions. It is fetched from a location only this
-      # repository's secrets know, checked against the digest pinned in core/fixtures/reference.toml, and
+      # repository's secrets know, checked against the digest pinned in core/fixtures/reference.json, and
       # never kept. A missing secret is a red job, not a skipped one.
       - name: Fetch and check the reference recording
         env:

@@ -38,6 +38,28 @@ jobs:
           cargo --version
           rustc --version
 
+      # The guarantee that the fingerprints equal their references runs the reference script with the
+      # interpreter pinned in tools/versions.toml and the media tool pinned there, and it fails rather than
+      # skips when either is absent. So this job fetches both, the same way the core workflow does.
+      - name: Read the pinned interpreter line
+        id: interpreter
+        run: |
+          line=$(awk '$0 == "[python]" { inside = 1; next } /^\[/ { inside = 0 } inside && $1 == "version" { gsub(/"/, "", $3); print $3; exit }' tools/versions.toml)
+          test -n "$line"
+          printf 'line=%s\n' "$line" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ steps.interpreter.outputs.line }}
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: tools-${{ hashFiles('tools/versions.toml') }}
+
+      - name: Fetch the pinned external tools
+        run: scripts/fetch-tools.sh
+
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: core
@@ -60,7 +82,8 @@ jobs:
 
     # A milestone lands on the default branch as one squash commit whose subject is the pull request title,
     # so the title has to be the commit subject the contribution guide describes: a type, an optional scope,
-    # and a lower-case subject with no trailing full stop, in at most seventy-two characters.
+    # and a subject that starts with a lower-case letter or a digit, carries no trailing full stop, and fits
+    # in seventy-two characters. An acronym inside the subject is left alone.
     if: github.event_name == 'pull_request'
 
     steps:
@@ -74,7 +97,7 @@ jobs:
           pattern='^(feat|fix|perf|refactor|docs|test|chore|security)(\([a-z0-9-]+\))?: [a-z0-9].*[^.]$'
           if ! printf '%s\n' "$TITLE" | grep -Eq "$pattern"; then
             printf 'The pull request title is not a Conventional Commits subject.\n'
-            printf 'Expected: <type>(<scope>): <subject>, lower-case, no trailing full stop.\n'
+            printf 'Expected: <type>(<scope>): <subject>, starting lower-case, no trailing full stop.\n'
             printf 'Types: feat, fix, perf, refactor, docs, test, chore, security.\n'
             exit 1
           fi

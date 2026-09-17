@@ -37,6 +37,9 @@ allow = [
     "0BSD",
     "CC0-1.0",
     "MPL-2.0",
+    # The University of Illinois/NCSA licence: permissive, attribution only, the terms of the fuzzing engine
+    # the fuzzing project links. That project is checked with this same file.
+    "NCSA",
 ]
 # No exception. An exception here would be a crate whose licence the policy refuses, kept anyway.
 exceptions = []

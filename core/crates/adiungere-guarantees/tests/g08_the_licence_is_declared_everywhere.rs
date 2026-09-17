@@ -28,7 +28,7 @@ const CANONICAL_DIGEST: &str = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3
 
 /// The licences this project accepts in its dependency graph. Permissive, or copyleft limited to the file
 /// it covers; nothing that reaches the work as a whole.
-const ACCEPTED: [&str; 11] = [
+const ACCEPTED: [&str; 12] = [
     "0BSD",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
@@ -38,6 +38,7 @@ const ACCEPTED: [&str; 11] = [
     "ISC",
     "MIT",
     "MPL-2.0",
+    "NCSA",
     "Unicode-3.0",
     "Zlib",
 ];
@@ -236,6 +237,64 @@ fn the_review_pipeline_admits_the_same_licences_as_the_policy() {
         accepted(),
         "The dependency review's allow list differs from the policy's."
     );
+}
+
+/// The package identifiers a workflow exempts from the licence check, comments removed.
+fn workflow_exemptions(workflow: &str) -> Vec<String> {
+    let cleaned = without_hash_comments(workflow);
+    let Some((_, after)) = cleaned.split_once("allow-dependencies-licenses:") else {
+        return Vec::new();
+    };
+
+    after
+        .lines()
+        .skip_while(|line| line.trim() == ">-" || line.trim().is_empty())
+        .take_while(|line| line.starts_with("            "))
+        .flat_map(|line| line.split(','))
+        .map(|entry| entry.trim().to_owned())
+        .filter(|entry| !entry.is_empty())
+        .collect()
+}
+
+#[test]
+fn the_review_pipeline_exempts_only_pipeline_actions_from_the_licence_check() {
+    // The policy governs what the product links and ships. An action runs on the build machine and ships
+    // nothing, so one under a reciprocal licence may be exempted by name. A crate never may: a crate
+    // exemption would be the exception the dependency policy refuses, written in the other list.
+
+    // Arrange
+    let workflow = read_at(".github/workflows/analysis.yml").unwrap();
+
+    // Act
+    let exemptions = workflow_exemptions(&workflow);
+
+    // Assert
+    assert!(
+        !exemptions.is_empty(),
+        "no exemption was read; the parser found nothing, which would hide a crate exemption too"
+    );
+    let offending: Vec<&String> = exemptions
+        .iter()
+        .filter(|entry| !entry.starts_with("pkg:githubactions/"))
+        .collect();
+    assert!(
+        offending.is_empty(),
+        "These exemptions are not pipeline actions; a crate is never exempted from the policy: {offending:?}"
+    );
+}
+
+#[test]
+fn the_exemption_reader_reads_the_exemption_list_and_not_the_licence_list() {
+    // Arrange
+    let text = "        with:\n          allow-licenses: >-\n            MIT\n          allow-dependencies-licenses: >-\n            pkg:githubactions/x/y, pkg:cargo/z\n          other: x\n";
+
+    // Act
+    let exemptions = workflow_exemptions(text);
+    let licences = workflow_allow_list(text);
+
+    // Assert
+    assert_eq!(exemptions, vec!["pkg:githubactions/x/y", "pkg:cargo/z"]);
+    assert_eq!(licences.into_iter().collect::<Vec<_>>(), vec!["MIT"]);
 }
 
 #[test]

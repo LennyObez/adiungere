@@ -1,14 +1,15 @@
 #!/bin/sh
 #
-# The nightly checks that need the dated nightly compiler: fuzzing, undefined-behaviour checking and
-# mutation testing. The channel comes from `tools/versions.toml` and nowhere else; the product's own
-# compiler is pinned in `rust-toolchain.toml` and this script never touches it.
+# The nightly checks. Fuzzing and undefined-behaviour checking need the dated nightly compiler, whose
+# channel comes from `tools/versions.toml` and nowhere else. Mutation testing runs on the product's own
+# compiler, pinned in `rust-toolchain.toml`, because a mutant is judged by the compiler that builds the
+# product; this script never touches that pin.
 #
 #     scripts/nightly.sh install            install the dated nightly with the components the jobs need
 #     scripts/nightly.sh seeds DIR          write the synthetic corpus into DIR as fuzzing seeds
 #     scripts/nightly.sh fuzz TARGET DIR S  run one fuzz target for S seconds, seeded from DIR
-#     scripts/nightly.sh miri               run the unit tests of the reader and the fingerprints under Miri
-#     scripts/nightly.sh mutants            run mutation testing on the reader and the fingerprints
+#     scripts/nightly.sh miri               run the unit tests of the four library crates under Miri
+#     scripts/nightly.sh mutants            run mutation testing on the four library crates
 
 set -eu
 

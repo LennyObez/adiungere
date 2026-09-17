@@ -78,11 +78,11 @@ synthetic fixture alone, and every probe listed here has a verdict in the eviden
       P37 measured ahead of the code they inform
 - [x] Core platform matrix, including a WebAssembly build
 
-Two probes carry a half that only the pipeline can measure, and the evidence register says so on each: P01's
-Apple reader runs on the macOS runner, and P36's Windows and macOS builds run in the matrix, so their first
-measurement is the first run of the milestone's pull request rather than a maintainer's machine. The
-nightly pipeline is the same: written, watched failing where a guarantee reads it, and first executed on
-the default branch after this milestone lands.
+Two probes carry a half that only the pipeline can measure, and the evidence register records each: P01's
+Apple reader ran on the macOS runner and P36's Windows and macOS builds ran in the matrix on the
+milestone's pull request, which is where a maintainer's machine stops. The nightly pipeline is written,
+watched failing where a guarantee reads it, and first executed on the default branch after this milestone
+lands.
 
 ## M2: Lossless extraction
 

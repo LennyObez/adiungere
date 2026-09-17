@@ -27,8 +27,8 @@ because one repository publishes several things.
   underneath.
 - Rust workspace with the toolchain pinned patch-exact in one file at the root, unsafe code forbidden
   workspace-wide, the panicking constructs denied outside tests, exact dependency versions with the lock file
-  committed, and a supply-chain policy admitting eleven named licences and nothing copyleft beyond the file
-  level, no unknown registry and no git source.
+  committed, and a supply-chain policy admitting twelve named licences and nothing copyleft beyond the file
+  level, no unknown registry and no git source, applied to the fuzzing project as well as the workspace.
 - The guarantee suite, each member watched failing against a deliberate violation before being trusted, and
   each scanning member carrying a detection test and a reach test so it cannot pass by reading nothing. Two of
   them reconcile the documentation with the repository, so a count written in a README cannot quietly stop

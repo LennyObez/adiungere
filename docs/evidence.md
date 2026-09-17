@@ -53,9 +53,19 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   compare. The stored length prefix is four bytes on the reference clip, which is the precondition.
 - **Decides:** the shape of the fingerprint recipe, and whether platform readers can serve as oracles.
 - **Result:** measured on 2026-09-15 for the browser-side reader, on the reference recording and on every
-  recording of the synthetic corpus; the Apple reader is measured by the oracles pipeline on the corpus,
-  through the harness in `tools/oracles/platform-reader.swift`, and this entry is extended with its answer
-  the first time that pipeline runs.
+  recording of the synthetic corpus, and on 2026-09-17 for the Apple reader, on the corpus, by the oracles
+  pipeline through the harness in `tools/oracles/platform-reader.swift`.
+
+  The Apple reader, asked for samples in their stored form and with its marker buffers skipped, hands back
+  the stored bytes: its digest equals the track fingerprint on every track whose edit list starts at media
+  time zero or is absent, which is every track of the reference-like recording and of the layout, prefix
+  width and chunking variants. It reads a track **as edited**: on the corpus recording whose edit list
+  starts one sample into the media, it delivered every video sample, because it backs up to the sync
+  sample before the edit, and one audio sample fewer than the file holds, because every audio sample is a
+  sync sample. So a platform reader cannot serve as an oracle of a fingerprint defined over every stored
+  sample when the edit list trims media, and the oracle script reports those tracks instead of comparing
+  them. The reference recorder writes edit lists that start at media time zero, so its recordings are
+  compared in full.
 
   The browser-side demuxing library, at the version pinned in `tools/oracles/package.json`, hands back
   every packet exactly as stored: the SHA-256 of its packets concatenated in decode order equals the track
@@ -65,13 +75,17 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   audio it exposes the two-byte specific configuration rather than the whole elementary stream descriptor
   the fingerprint digests, so that digest is not compared for audio; the payload digest is.
 
-  Consequence: the fingerprint recipe stands as defined, and the browser reader can serve as an oracle
-  and, at M4, as the demuxer behind the website's player without any concern that what it decodes differs
-  from what the core fingerprints.
+  Consequence: the fingerprint recipe stands as defined; the browser reader can serve as an oracle and, at
+  M4, as the demuxer behind the website's player without any concern that what it decodes differs from
+  what the core fingerprints; the Apple reader can serve as an oracle for recordings whose edit lists do
+  not trim, and at M8 the fingerprint of a recording is computed by the core over the file, never by the
+  platform reader over the edited track.
 
   ```console
   $ scripts/oracles.sh browser /tmp/corpus
-  oracles: the browser reader agrees with the product on all 26 tracks
+  oracles: the browser reader agrees with the product on all 26 compared tracks, 0 reported as edited
+  $ scripts/oracles.sh platform /tmp/corpus
+  oracles: the platform reader agrees with the product on all 23 compared tracks, 3 reported as edited
   ```
 
 ## P02 Vendor box placement, internal offsets and the four-byte vendor code
@@ -626,8 +640,10 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   build for WebAssembly, and the whole workspace less the guarantee suite builds for static Linux, both
   measured locally with the pinned compiler. The pipeline now carries the full matrix: the gate sequence
   on Linux, build and tests on macOS on both architectures and on Windows, a static Linux build, and a
-  WebAssembly build of the four browser crates. Windows and macOS are measured by that pipeline on the
-  first push of M1, and this entry is extended with their answer.
+  WebAssembly build of the four browser crates. Windows and macOS were measured by that pipeline on
+  2026-09-17: the workspace less the guarantee suite builds and passes every test on Windows, on macOS
+  arm64 and on macOS x86_64 with the pinned compiler, and the static Linux and WebAssembly builds pass on
+  the runner as they did locally.
 
   ```console
   $ cargo check --target wasm32-unknown-unknown

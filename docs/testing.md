@@ -134,10 +134,11 @@ first red.
 | 9 | The published site | `scripts/check-site.sh`: nothing loaded from another host, security contact current |
 | 10 | Shell scripts | `shellcheck scripts/*.sh` |
 | 11 | Advisories, licences, sources and bans | `cargo deny check` |
-| 12 | Golden and property suites | M2, with the first export writer, over the fixture corpus |
-| 13 | Mutation testing, fuzzing, undefined-behaviour checking | nightly pipeline, through scripts/nightly.sh |
-| 14 | Cross-platform and WebAssembly build matrix | pull-request pipeline, the four matrix jobs of the core workflow |
-| 15 | The browser and Apple readers agree with the fingerprint | oracles pipeline, through scripts/oracles.sh |
+| 12 | The same policy over the fuzzing project | `cargo deny --manifest-path core/fuzz/Cargo.toml check --config core/deny.toml` |
+| 13 | Golden and property suites | M2, with the first export writer, over the fixture corpus |
+| 14 | Mutation testing, fuzzing, undefined-behaviour checking | nightly pipeline, through scripts/nightly.sh |
+| 15 | Cross-platform and WebAssembly build matrix | pull-request pipeline, the four matrix jobs of the core workflow |
+| 16 | The browser and Apple readers agree with the fingerprint | oracles pipeline, through scripts/oracles.sh |
 
 A guarantee holds that this table and the script cannot drift apart: the steps the script runs, in order,
 must be exactly the rows whose command column holds a command rather than a milestone, which is **G52**. A
