@@ -352,27 +352,31 @@ pub fn pinned_media_tool() -> Result<PathBuf, String> {
 /// reports another version.
 pub fn pinned_media_prober() -> Result<PathBuf, String> {
     let tool = pinned_media_tool()?;
-    let prober = tool.with_file_name("ffprobe");
-    let version = pinned("ffmpeg", "version").ok_or("tools/versions.toml pins no media tool version")?;
-    let reported = Command::new(&prober)
-        .arg("-version")
-        .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
-        .unwrap_or_default();
-    if reported
+    [tool.with_file_name("ffprobe")]
+        .into_iter()
+        .find(|candidate| reports_the_pinned_version(candidate))
+        .ok_or_else(|| {
+            format!(
+                "the probing companion of the media tool is absent beside {} or is not at the pinned \
+                 version. Run scripts/fetch-tools.sh; a guarantee that counted packets with another parser \
+                 would be comparing against the wrong oracle",
+                tool.display()
+            )
+        })
+}
+
+/// Whether a candidate tool prints the pinned media tool version on the first line of its version report.
+fn reports_the_pinned_version(candidate: &Path) -> bool {
+    let Some(version) = pinned("ffmpeg", "version") else {
+        return false;
+    };
+    let Ok(output) = Command::new(candidate).arg("-version").output() else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
         .lines()
         .next()
         .is_some_and(|first| first.contains(&version))
-    {
-        Ok(prober)
-    } else {
-        Err(format!(
-            "the probing companion of the media tool is absent beside {} or is not at the pinned version. \
-             Run scripts/fetch-tools.sh; a guarantee that counted packets with another parser would be \
-             comparing against the wrong oracle",
-            tool.display()
-        ))
-    }
 }
 
 /// Returns the text with every line comment and every line that is only a comment removed, for
