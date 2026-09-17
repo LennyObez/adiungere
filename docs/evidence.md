@@ -768,8 +768,8 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   the product writes is one the applications people already have will play. A refusal or a silent first
   frame on either platform is a defect of the writer, to be reproduced on the synthetic corpus before it is
   fixed.
-- **Result:** measured on 2026-09-17 on Windows and on an iPhone; an Android gallery follows when a device
-  is at hand.
+- **Result:** measured on 2026-09-17 on Windows and on an iPhone, which is what the milestone asks; an
+  Android gallery is added here when a device is at hand.
 
   The rear-only export of the reference recording, 60 591 108 bytes, two tracks, was written in twelve
   seconds by the release command line and opened where it was written, on the machine that holds the
