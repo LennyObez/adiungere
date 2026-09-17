@@ -1,0 +1,40 @@
+# Crates that link or bundle a video or audio encoder, or a media framework that carries one.
+#
+# The lossless export never re-encodes, and the surest way to keep it that way is for no encoder to be in
+# the dependency graph at all. Guarantee G25 resolves the workspace with `cargo metadata` and refuses a
+# graph that contains one of these crates, under this exact name or under this name followed by `-` or `_`,
+# such as a `-sys` binding. The symbol check in `scripts/check-encoder-symbols.sh` is the second line: it
+# catches an encoder reached through a crate this list does not name.
+#
+# One crate name per line. Lines starting with `#` and blank lines are ignored.
+
+# Bindings to the common media framework and to the player library built on it.
+ffmpeg
+ffmpeg-next
+ffmpeg-sys
+ffmpeg-sys-next
+libmpv
+mpv
+
+# Video encoders.
+x264
+x265
+openh264
+rav1e
+aom
+libaom
+vpx
+libvpx
+env-libvpx-sys
+svt-av1
+
+# Audio encoders.
+fdk-aac
+lame
+mp3lame
+opus
+audiopus
+vorbis
+
+# The streaming framework the Linux shell will use from the platform, never from this graph.
+gstreamer

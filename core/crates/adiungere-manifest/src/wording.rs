@@ -140,6 +140,8 @@ pub enum Phrase {
     ScanNotReadable,
     /// Files skipped by their extension.
     ScanSkipped,
+    /// Nothing was opened.
+    ScanNothing,
     /// An export was written.
     ExportWritten,
     /// One track of an export and where it came from.
@@ -156,7 +158,7 @@ pub enum Phrase {
 
 impl Phrase {
     /// Every phrase, so that the catalogue can be checked against the code in both directions.
-    pub const ALL: [Self; 56] = [
+    pub const ALL: [Self; 57] = [
         Self::FactsOnly,
         Self::NotAnExamination,
         Self::MoovFirst,
@@ -207,6 +209,7 @@ impl Phrase {
         Self::ScanNotRecognised,
         Self::ScanNotReadable,
         Self::ScanSkipped,
+        Self::ScanNothing,
         Self::ExportWritten,
         Self::ExportTrack,
         Self::ExportPreserved,
@@ -269,6 +272,7 @@ impl Phrase {
             Self::ScanNotRecognised => "scan.not.recognised",
             Self::ScanNotReadable => "scan.not.readable",
             Self::ScanSkipped => "scan.skipped",
+            Self::ScanNothing => "scan.nothing",
             Self::ExportWritten => "export.written",
             Self::ExportTrack => "export.track",
             Self::ExportPreserved => "export.preserved",

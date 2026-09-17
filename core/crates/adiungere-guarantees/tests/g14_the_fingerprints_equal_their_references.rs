@@ -13,7 +13,7 @@ use std::process::Command;
 
 use adiungere_fingerprint::{Digest, annex_b_digest, track_fingerprint};
 use adiungere_fixtures::{build, corpus};
-use adiungere_guarantees::{read_at, repository_root, without_hash_comments};
+use adiungere_guarantees::{pinned, pinned_media_tool, repository_root};
 use adiungere_isobmff::{TrackKind, parse};
 use sha2::{Digest as _, Sha256};
 
@@ -40,73 +40,6 @@ impl Drop for Temporary {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
     }
-}
-
-/// The value of a key inside one table of the versions file.
-fn pinned(table: &str, key: &str) -> Option<String> {
-    let source = without_hash_comments(&read_at("tools/versions.toml").ok()?);
-    let mut inside = false;
-    for line in source.lines() {
-        let line = line.trim();
-        if line.starts_with('[') {
-            inside = line == format!("[{table}]");
-            continue;
-        }
-        if inside
-            && let Some((name, value)) = line.split_once('=')
-            && name.trim() == key
-        {
-            return Some(value.trim().trim_matches('"').to_owned());
-        }
-    }
-    None
-}
-
-/// Whether a candidate media tool sits where the versions file says the fetched one is, or on the path,
-/// and reports the pinned version. The versions file decides acceptance and nothing else: no value read
-/// from it becomes part of a command.
-fn is_the_pinned_ffmpeg(candidate: &Path, tools: &Path) -> bool {
-    let Some(version) = pinned("ffmpeg", "version") else {
-        return false;
-    };
-    let Some(binary) = pinned("ffmpeg.linux-x86_64", "binary") else {
-        return false;
-    };
-    if candidate.starts_with(tools) && candidate != tools.join(binary) {
-        return false;
-    }
-    let Ok(output) = Command::new(candidate).arg("-version").output() else {
-        return false;
-    };
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .next()
-        .is_some_and(|first| first.contains(&version))
-}
-
-/// The pinned media tool, from the fetched tools directory or the path, at the pinned version only.
-///
-/// The candidates come from listing the tools directory, never from a value read out of a file.
-fn pinned_ffmpeg() -> Result<PathBuf, String> {
-    let tools = repository_root().join(".tools");
-    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&tools)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| entry.path().join("bin").join("ffmpeg"))
-                .collect()
-        })
-        .unwrap_or_default();
-    candidates.push(PathBuf::from("ffmpeg"));
-
-    candidates
-        .into_iter()
-        .find(|candidate| is_the_pinned_ffmpeg(candidate, &tools))
-        .ok_or_else(|| {
-            "the media tool at the version pinned in tools/versions.toml was not found. Run \
-             scripts/fetch-tools.sh; a guarantee that skipped it would be a guarantee that proved nothing"
-                .to_owned()
-        })
 }
 
 /// Whether a candidate interpreter is on the pinned release line.
@@ -209,7 +142,7 @@ fn the_reference_script_reproduces_every_fingerprint_on_the_corpus() {
 #[test]
 fn the_pinned_media_tool_reproduces_every_elementary_stream_digest_on_the_corpus() {
     // Arrange
-    let tool = pinned_ffmpeg().unwrap();
+    let tool = pinned_media_tool().unwrap();
     let directory = Temporary::new("tool");
     let recordings = write_corpus(&directory.0).unwrap();
     let mut compared = 0usize;

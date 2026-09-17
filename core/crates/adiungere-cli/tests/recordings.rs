@@ -225,7 +225,11 @@ fn detect_groups_a_directory_and_names_the_signs_of_a_rewrite() {
     assert!(printed.contains("one file holding two cameras"), "{printed}");
     assert!(printed.contains("No sign of rewriting was found"), "{printed}");
     assert!(
-        printed.contains("3 sign(s) that another program wrote this file"),
+        printed.contains("4 sign(s) that another program wrote this file"),
+        "{printed}"
+    );
+    assert!(
+        printed.contains("the encoder tag Lavf belongs to another program"),
         "{printed}"
     );
     assert!(

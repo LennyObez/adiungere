@@ -76,6 +76,9 @@ pub struct Vendor {
     pub udta_box: bool,
     /// Whether the top level carries the twelve-byte synthetic vendor box after the movie box.
     pub top_level_box: bool,
+    /// Whether the user-data box carries a metadata box naming another program's muxer, as a file that
+    /// program rewrote carries one.
+    pub encoder_tag_box: bool,
 }
 
 /// Structural oddities a variant introduces.
@@ -115,6 +118,10 @@ pub struct Spec {
     pub compressor: &'static str,
     /// The chunk grouping.
     pub chunking: Chunking,
+    /// The width and height the track header and the sample entry declare. The coded frames are
+    /// [`FRAME_SIZE`] square whatever this says; a smaller value is what a file capped by another program
+    /// declares.
+    pub declared_size: u16,
 }
 
 impl Spec {
@@ -136,6 +143,7 @@ impl Spec {
             vendor: Vendor {
                 udta_box: true,
                 top_level_box: true,
+                encoder_tag_box: false,
             },
             quirks: Quirks {
                 edit_list: false,
@@ -143,6 +151,7 @@ impl Spec {
             },
             compressor: "synthetic pattern",
             chunking: Chunking { video: 15, audio: 22 },
+            declared_size: FRAME_SIZE,
         }
     }
 
@@ -222,6 +231,7 @@ pub fn corpus() -> Vec<Spec> {
             vendor: Vendor {
                 udta_box: false,
                 top_level_box: false,
+                encoder_tag_box: true,
             },
             compressor: "another program",
             ..base.clone()
@@ -229,6 +239,11 @@ pub fn corpus() -> Vec<Spec> {
         Spec {
             name: "one-sample-per-chunk",
             chunking: Chunking { video: 1, audio: 1 },
+            ..base.clone()
+        },
+        Spec {
+            name: "capped",
+            declared_size: 32,
             ..base
         },
     ]
@@ -732,8 +747,8 @@ fn video_plan(spec: &Spec, role: Role, track_id: u32, stream: &VideoStream) -> R
         .zeros(6)
         .u16(1)
         .zeros(16)
-        .u16(FRAME_SIZE)
-        .u16(FRAME_SIZE)
+        .u16(spec.declared_size)
+        .u16(spec.declared_size)
         .u32(0x0048_0000)
         .u32(0x0048_0000)
         .u32(0)
@@ -759,8 +774,8 @@ fn video_plan(spec: &Spec, role: Role, track_id: u32, stream: &VideoStream) -> R
         configuration_payload,
         sequence_parameter_sets: stream.sequence_parameter_sets.clone(),
         picture_parameter_sets: stream.picture_parameter_sets.clone(),
-        width: FRAME_SIZE,
-        height: FRAME_SIZE,
+        width: spec.declared_size,
+        height: spec.declared_size,
     })
 }
 
@@ -884,11 +899,47 @@ fn build_moov(spec: &Spec, plans: &[Plan], chunk_offsets: &[Vec<u64>], media_bas
         children.push(build_trak(spec, plan, offsets, media_base));
     }
 
+    let mut user_data = Vec::new();
     if spec.vendor.udta_box {
-        children.push(container(*b"udta", &[vendor_box()]));
+        user_data.push(vendor_box());
+    }
+    if spec.vendor.encoder_tag_box {
+        user_data.push(encoder_tag_box());
+    }
+    if !user_data.is_empty() {
+        children.push(container(*b"udta", &user_data));
     }
 
     container(*b"moov", &children)
+}
+
+/// The metadata box a common muxer writes under user data when it rewrites a file: a handler naming the
+/// metadata layout, then an item list whose one item is the encoder tag. The tag is the marker the
+/// scanner looks for; the layout around it is the one that program writes.
+fn encoder_tag_box() -> Vec<u8> {
+    let handler = full_box(
+        *b"hdlr",
+        0,
+        0,
+        &Fields::new()
+            .u32(0)
+            .bytes(b"mdir")
+            .bytes(b"appl")
+            .zeros(9)
+            .finish(),
+    );
+    let data = full_box(
+        *b"data",
+        0,
+        1,
+        &Fields::new().u32(0).bytes(b"Lavf62.0.100").finish(),
+    );
+    let tool = boxed(*b"\xa9too", &data);
+    let list = boxed(*b"ilst", &tool);
+    let mut payload = Fields::new().u32(0).finish();
+    payload.extend_from_slice(&handler);
+    payload.extend_from_slice(&list);
+    boxed(*b"meta", &payload)
 }
 
 /// The synthetic vendor box: a header, a marker string, then deterministic bytes that no parser reads.

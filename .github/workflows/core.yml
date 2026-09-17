@@ -115,6 +115,13 @@ jobs:
       - name: The lock file matches the manifests
         run: cargo metadata --locked --format-version 1 > /dev/null
 
+      # The release command line, read symbol by symbol with the toolchain's own reader. The script judges a
+      # fixture that carries one forbidden name before it judges the product, so a green here is a check
+      # that has just been seen to find something.
+      - name: No encoder symbol in the release command line
+        working-directory: .
+        run: scripts/check-encoder-symbols.sh
+
   matrix:
     name: Core on ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}

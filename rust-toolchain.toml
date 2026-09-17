@@ -5,10 +5,11 @@
 # restates a version, so every job takes the pin from here.
 #
 # The components are the ones a check uses today. A component nothing uses is a download every contributor
-# pays for a check that does not exist; when the release binary is inspected for encoder symbols at M2, the
-# tool that does it joins this list in the same change as the check.
+# pays for a check that does not exist. The formatter and the linter run in the gate; the LLVM tools carry
+# the symbol reader that scripts/check-encoder-symbols.sh runs over the release command line, so that the
+# same reader judges the binary on every platform it is built on.
 
 [toolchain]
 channel = "1.98.1"
-components = ["rustfmt", "clippy"]
+components = ["rustfmt", "clippy", "llvm-tools"]
 profile = "minimal"

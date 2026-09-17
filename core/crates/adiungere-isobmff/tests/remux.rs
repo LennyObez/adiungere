@@ -226,7 +226,7 @@ fn every_corpus_recording_remuxes_to_a_recording_that_reads_back_as_itself() {
         assert_eq!(samples_of(&out).unwrap(), source_samples, "{}", spec.name);
         assert_eq!(
             container.udta_children().len(),
-            usize::from(spec.vendor.udta_box),
+            usize::from(spec.vendor.udta_box) + usize::from(spec.vendor.encoder_tag_box),
             "{}",
             spec.name
         );

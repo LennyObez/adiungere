@@ -1098,87 +1098,97 @@ fn describe_origin(text: &mut String, origin: &adiungere_scan::Origin) {
     }
 }
 
+/// Describes a pair: the two files named, then what each one's structure shows.
+fn describe_pair(text: &mut String, members: &[adiungere_scan::Member]) {
+    let path_of = |camera: adiungere_scan::Camera, absent: &str| {
+        members.iter().find(|member| member.camera == camera).map_or_else(
+            || absent.to_owned(),
+            |member| member.file.path.display().to_string(),
+        )
+    };
+    let front = path_of(adiungere_scan::Camera::Front, "no front file");
+    let rear = path_of(adiungere_scan::Camera::Rear, "no rear file");
+    let _ = writeln!(
+        text,
+        "  {}",
+        render(Phrase::ScanPaired, &[("front", &front), ("rear", &rear)])
+    );
+    for member in members {
+        describe_origin(text, &member.origin);
+    }
+}
+
+/// Describes one recording: what it is, then what its structure shows about where it came from.
+fn describe_recording(text: &mut String, recording: &Recording) {
+    match recording {
+        Recording::SingleFile {
+            file,
+            video_tracks,
+            origin,
+        } => {
+            let phrase = if *video_tracks >= 2 {
+                Phrase::ScanSingleDual
+            } else {
+                Phrase::ScanSingleMono
+            };
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(phrase, &[("name", &file.path.display().to_string())])
+            );
+            describe_origin(text, origin);
+        },
+        Recording::Paired { members, .. } => describe_pair(text, members),
+        Recording::Unpaired { file, origin, .. } => {
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(
+                    Phrase::ScanUnpaired,
+                    &[("name", &file.path.display().to_string())]
+                )
+            );
+            describe_origin(text, origin);
+        },
+        Recording::Unrecognised {
+            file,
+            video_tracks,
+            origin,
+        } => {
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(
+                    Phrase::ScanNotRecognised,
+                    &[
+                        ("name", &file.path.display().to_string()),
+                        ("count", &video_tracks.to_string()),
+                    ]
+                )
+            );
+            describe_origin(text, origin);
+        },
+        Recording::Unreadable { file, reason } => {
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(
+                    Phrase::ScanNotReadable,
+                    &[("name", &file.path.display().to_string()), ("reason", reason)]
+                )
+            );
+        },
+    }
+}
+
 fn describe_recordings(scanned: &Scan) -> String {
     let recordings = &scanned.recordings;
     let mut text = String::new();
     for recording in recordings {
-        match recording {
-            Recording::SingleFile {
-                file,
-                video_tracks,
-                origin,
-            } => {
-                let phrase = if *video_tracks >= 2 {
-                    Phrase::ScanSingleDual
-                } else {
-                    Phrase::ScanSingleMono
-                };
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(phrase, &[("name", &file.path.display().to_string())])
-                );
-                describe_origin(&mut text, origin);
-            },
-            Recording::Paired { members, .. } => {
-                let front = members
-                    .iter()
-                    .find(|member| member.camera == adiungere_scan::Camera::Front)
-                    .map_or_else(
-                        || "no front file".to_owned(),
-                        |member| member.file.path.display().to_string(),
-                    );
-                let rear = members
-                    .iter()
-                    .find(|member| member.camera == adiungere_scan::Camera::Rear)
-                    .map_or_else(
-                        || "no rear file".to_owned(),
-                        |member| member.file.path.display().to_string(),
-                    );
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(Phrase::ScanPaired, &[("front", &front), ("rear", &rear)])
-                );
-                for member in members {
-                    describe_origin(&mut text, &member.origin);
-                }
-            },
-            Recording::Unpaired { file, origin, .. } => {
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(
-                        Phrase::ScanUnpaired,
-                        &[("name", &file.path.display().to_string())]
-                    )
-                );
-                describe_origin(&mut text, origin);
-            },
-            Recording::Unrecognised { file } => {
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(
-                        Phrase::ScanNotRecognised,
-                        &[("name", &file.path.display().to_string())]
-                    )
-                );
-            },
-            Recording::Unreadable { file, reason } => {
-                let _ = writeln!(
-                    text,
-                    "  {}",
-                    render(
-                        Phrase::ScanNotReadable,
-                        &[("name", &file.path.display().to_string()), ("reason", reason)]
-                    )
-                );
-            },
-        }
+        describe_recording(&mut text, recording);
     }
     if recordings.is_empty() {
-        text.push_str("  Nothing was found.\n");
+        let _ = writeln!(text, "  {}", render(Phrase::ScanNothing, &[]));
     }
     if scanned.skipped_by_extension > 0 {
         let _ = writeln!(

@@ -153,9 +153,48 @@ fn a_rewritten_file_beside_a_recorder_file_shows_every_sign_and_the_recorder_fil
         rewritten.signals,
         vec![
             Signal::MoovAfterMdat,
+            Signal::ForeignMuxerTag {
+                tag: "Lavf".to_owned()
+            },
             Signal::SingleVideoTrackWhereSiblingHasTwo,
             Signal::VendorBoxesAbsent,
         ]
+    );
+}
+
+#[test]
+fn a_capped_file_beside_a_recorder_file_shows_the_resolution_sign_and_nothing_else() {
+    // Arrange
+    let directory = Temporary::new("capped");
+    write(directory.path(), "20260604_122323E.MP4", &Spec::reference_like()).unwrap();
+    write(
+        directory.path(),
+        "20260604_122423E.MP4",
+        &spec_named("capped").unwrap(),
+    )
+    .unwrap();
+
+    // Act
+    let recordings = scan(&[directory.path().to_path_buf()], None).recordings;
+
+    // Assert
+    let capped = recordings
+        .iter()
+        .find_map(|recording| match recording {
+            Recording::SingleFile { file, origin, .. } if file.probe.name == "20260604_122423E.MP4" => {
+                Some(origin.clone())
+            },
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        capped.signals,
+        vec![Signal::ResolutionBelowSiblings {
+            width: 32,
+            height: 32,
+            sibling_width: 64,
+            sibling_height: 64,
+        }]
     );
 }
 

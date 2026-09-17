@@ -1,0 +1,41 @@
+# Symbols that belong to a video or audio encoder, or to a media framework that carries one.
+#
+# The lossless export is a copy of the recorder's samples into a new container. A binary that links an
+# encoder could re-encode by accident, by a default, or by a dependency's convenience path, and a file that
+# went through an encoder is no longer the evidence it was. So the release command line is read with the
+# toolchain's symbol reader and refused if any of its symbols, defined or imported, contains one of these
+# fragments. `scripts/check-encoder-symbols.sh` reads this file; guarantee G25 holds it non-empty and sees
+# the check find a fixture that carries one of these names before the real binary is judged.
+#
+# One fragment per line, matched as a fixed substring of the demangled symbol. Lines starting with `#` and
+# blank lines are ignored.
+
+# Video encoders, by their C entry points.
+x264_encoder_
+x265_encoder_
+WelsCreateSVCEncoder
+aom_codec_enc_
+vpx_codec_enc_
+rav1e_
+svt_av1_enc_
+
+# Audio encoders.
+aacEncOpen
+faacEncOpen
+lame_init
+opus_encoder_create
+vorbis_encode_init
+
+# Media frameworks that bundle encoders. Any use of them, decoding included, is refused in this binary.
+avcodec_
+avformat_
+mpv_create
+gst_init
+
+# The same libraries reached through a binding crate, by the crate's path in a demangled symbol.
+openh264::
+ffmpeg_next::
+ffmpeg_sys
+x264::
+rav1e::
+gstreamer::
