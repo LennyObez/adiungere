@@ -140,11 +140,23 @@ pub enum Phrase {
     ScanNotReadable,
     /// Files skipped by their extension.
     ScanSkipped,
+    /// An export was written.
+    ExportWritten,
+    /// One track of an export and where it came from.
+    ExportTrack,
+    /// The boxes an export carried across as bytes.
+    ExportPreserved,
+    /// An export carried no box across.
+    ExportPreservedNone,
+    /// Where the export's manifest was written.
+    ExportManifest,
+    /// What an export shows of people and places, said after every export.
+    ExportFaces,
 }
 
 impl Phrase {
     /// Every phrase, so that the catalogue can be checked against the code in both directions.
-    pub const ALL: [Self; 50] = [
+    pub const ALL: [Self; 56] = [
         Self::FactsOnly,
         Self::NotAnExamination,
         Self::MoovFirst,
@@ -195,6 +207,12 @@ impl Phrase {
         Self::ScanNotRecognised,
         Self::ScanNotReadable,
         Self::ScanSkipped,
+        Self::ExportWritten,
+        Self::ExportTrack,
+        Self::ExportPreserved,
+        Self::ExportPreservedNone,
+        Self::ExportManifest,
+        Self::ExportFaces,
     ];
 
     /// The catalogue key.
@@ -251,6 +269,12 @@ impl Phrase {
             Self::ScanNotRecognised => "scan.not.recognised",
             Self::ScanNotReadable => "scan.not.readable",
             Self::ScanSkipped => "scan.skipped",
+            Self::ExportWritten => "export.written",
+            Self::ExportTrack => "export.track",
+            Self::ExportPreserved => "export.preserved",
+            Self::ExportPreservedNone => "export.preserved.none",
+            Self::ExportManifest => "export.manifest",
+            Self::ExportFaces => "export.faces",
         }
     }
 }

@@ -90,6 +90,35 @@ pub enum Error {
     /// The driver was asked for a step it cannot take: bytes were fed when none were requested, or a
     /// request was made while one was outstanding.
     Protocol,
+    /// The reader consumed what it asked for and neither advanced nor asked for more, which no input can
+    /// cause; a driver that kept going would loop forever, so it is told to stop.
+    Stalled {
+        /// Where the reader stood.
+        offset: u64,
+    },
+    /// The output could not be written.
+    Write(std::io::Error),
+    /// A track was selected that the container does not have.
+    NoSuchTrack {
+        /// The input, by position.
+        input: usize,
+        /// The track, by index under the movie box.
+        index: usize,
+    },
+    /// No track was selected, so there is nothing to write.
+    NothingSelected,
+    /// A box the output needs was not held by the reader, so its bytes cannot be copied.
+    NotHeld {
+        /// The box.
+        kind: FourCc,
+        /// Where the box starts.
+        offset: u64,
+    },
+    /// The caller asked to stop.
+    Cancelled {
+        /// How many bytes had been written when it did.
+        bytes_written: u64,
+    },
 }
 
 impl fmt::Display for Error {
@@ -144,6 +173,19 @@ impl fmt::Display for Error {
                 write!(formatter, "track {track}: {what}")
             },
             Self::Protocol => formatter.write_str("the parser was driven out of order"),
+            Self::Stalled { offset } => write!(formatter, "the reader made no progress at {offset}"),
+            Self::Write(cause) => write!(formatter, "the output could not be written: {cause}"),
+            Self::NoSuchTrack { input, index } => {
+                write!(formatter, "input {input} has no track {index}")
+            },
+            Self::NothingSelected => formatter.write_str("no track was selected"),
+            Self::NotHeld { kind, offset } => write!(
+                formatter,
+                "the {kind} box at {offset} was not held by the reader, so it cannot be copied"
+            ),
+            Self::Cancelled { bytes_written } => {
+                write!(formatter, "stopped on request after {bytes_written} bytes")
+            },
         }
     }
 }
@@ -152,6 +194,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Source(cause) => Some(cause),
+            Self::Write(cause) => Some(cause),
             _ => None,
         }
     }
@@ -160,5 +203,11 @@ impl std::error::Error for Error {
 impl From<SourceError> for Error {
     fn from(cause: SourceError) -> Self {
         Self::Source(cause)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(cause: std::io::Error) -> Self {
+        Self::Write(cause)
     }
 }

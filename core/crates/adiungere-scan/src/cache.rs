@@ -111,33 +111,11 @@ pub fn modified_seconds(metadata: &std::fs::Metadata) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    // The unit tests here touch no file and no clock, so that they run under the undefined-behaviour
+    // interpreter, which isolates both; the tests over a real file system are with the integration tests.
 
-    use super::{CACHE_FORMAT, ScanCache, modified_seconds};
+    use super::ScanCache;
     use crate::probe::Probe;
-
-    /// A file that exists for one test and is removed when the test ends, whichever way it ends.
-    struct Temporary(PathBuf);
-
-    impl Temporary {
-        fn new(name: &str) -> Self {
-            let unique = format!(
-                "adiungere-cache-{name}-{}-{:?}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|elapsed| elapsed.as_nanos())
-                    .unwrap_or_default()
-            );
-            Self(std::env::temp_dir().join(unique))
-        }
-    }
-
-    impl Drop for Temporary {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.0);
-        }
-    }
 
     fn probe(name: &str) -> Probe {
         Probe {
@@ -162,49 +140,5 @@ mod tests {
         assert!(cache.get("a.mp4", 100, 1_700_000_001).is_none());
         assert!(cache.get("a.mp4", 101, 1_700_000_001).is_none());
         assert!(cache.get("b.mp4", 100, 1_700_000_000).is_none());
-    }
-
-    #[test]
-    fn a_cache_that_does_not_parse_or_does_not_exist_starts_empty_and_a_saved_one_reloads() {
-        // Arrange
-        let garbled = Temporary::new("garbled");
-        std::fs::write(&garbled.0, "{ this is not json").unwrap();
-        let absent = Temporary::new("absent");
-        let saved = Temporary::new("saved");
-        let mut cache = ScanCache::new();
-        cache.insert("a.mp4", 100, 7, probe("a.mp4"));
-
-        // Act
-        let from_garbled = ScanCache::load(&garbled.0).unwrap();
-        let from_absent = ScanCache::load(&absent.0).unwrap();
-        cache.save(&saved.0).unwrap();
-        let reloaded = ScanCache::load(&saved.0).unwrap();
-
-        // Assert
-        assert_eq!(from_garbled, ScanCache::new());
-        assert_eq!(from_absent, ScanCache::new());
-        assert_eq!(from_absent.format, CACHE_FORMAT);
-        assert_eq!(reloaded, cache);
-        assert!(reloaded.get("a.mp4", 100, 7).is_some());
-    }
-
-    #[test]
-    fn the_modification_time_is_the_one_the_file_carries() {
-        // Arrange
-        let file = Temporary::new("mtime");
-        std::fs::write(&file.0, b"x").unwrap();
-        let stamp = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
-        std::fs::File::options()
-            .write(true)
-            .open(&file.0)
-            .unwrap()
-            .set_modified(stamp)
-            .unwrap();
-
-        // Act
-        let seconds = modified_seconds(&std::fs::metadata(&file.0).unwrap());
-
-        // Assert
-        assert_eq!(seconds, 1_600_000_000);
     }
 }

@@ -19,12 +19,18 @@
 //!
 //! Nothing here panics on any input. Sizes are checked, depth and count are capped, and an inconsistency is
 //! an [`Error`] that names the box and the offset.
+//!
+//! Writing follows the same rule. [`remux`] rewrites a container around samples it never touches: the
+//! kept tracks' boxes are copied as the bytes they were read as, only the chunk offset tables are written
+//! afresh, the user-data box and the unknown top-level boxes are carried across, and the movie box comes
+//! first so the output plays as it arrives.
 
 #![forbid(unsafe_code)]
 
 mod error;
 mod fourcc;
 mod parse;
+mod remux;
 mod samples;
 mod source;
 mod tree;
@@ -36,6 +42,7 @@ pub use parse::{
     Container, FILE_TYPE_BOX_CAP, MAX_CHILDREN, MAX_DEPTH, MAX_TOP_LEVEL, MOVIE_BOX_CAP, Parser, Request,
     Step, UNKNOWN_BOX_HOLD_CAP, parse, parse_async,
 };
+pub use remux::{Input, Placement, PreservedBox, Progress, RemuxPlan, RemuxReport, RemuxedTrack, remux};
 pub use samples::{MAX_SAMPLE_SIZE, Sample, SampleTable, Sizes};
 pub use source::{AsyncSource, CountingSource, FileSource, ReadRange, SliceSource, Source, SourceError};
 pub use tree::BoxRange;

@@ -13,10 +13,11 @@ pub mod time;
 mod verify;
 pub mod wording;
 
-pub use build::{Producer, build};
+pub use adiungere_fingerprint::{AnnexBDigest, Digest, StructuralFingerprint, TrackFingerprint};
+pub use build::{Producer, build, build_for_export};
 pub use manifest::{
-    EditEntry, FileRecord, MANIFEST_FORMAT, Manifest, Operation, Produced, Scope, Structure, TrackKind,
-    TrackRecord, VendorBox, VendorLocation, VendorRecord,
+    EditEntry, ExportClass, FileRecord, MANIFEST_FORMAT, Manifest, Masking, Operation, Produced, Scope,
+    SourceRecord, SourceTrack, Structure, TrackKind, TrackRecord, VendorBox, VendorLocation, VendorRecord,
 };
 pub use verify::{Finding, Outcome, Subject, Verification, verify};
 

@@ -283,3 +283,155 @@ fn a_manifest_of_another_format_is_refused_by_verify() {
         err(&output)
     );
 }
+
+#[test]
+fn export_writes_each_camera_with_its_manifest_and_verify_accepts_the_output() {
+    // Arrange
+    let directory = Temporary::new("export");
+    let clip = write_reference_like(directory.path(), "20260604_122323E.MP4").unwrap();
+    let rear = directory.path().join("rear.mp4");
+    let front = directory.path().join("front.mp4");
+    let both = directory.path().join("both.mp4");
+
+    // Act
+    let rear_run = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        rear.to_str().unwrap(),
+    ])
+    .unwrap();
+    let front_run = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "front",
+        "--out",
+        front.to_str().unwrap(),
+        "--format",
+        "json",
+    ])
+    .unwrap();
+    let both_run = run(&["export", clip.to_str().unwrap(), "--out", both.to_str().unwrap()]).unwrap();
+
+    // Assert
+    assert_eq!(rear_run.status.code(), Some(0), "{}", err(&rear_run));
+    assert_eq!(front_run.status.code(), Some(0), "{}", err(&front_run));
+    assert_eq!(both_run.status.code(), Some(0), "{}", err(&both_run));
+    let printed = out(&rear_run);
+    assert!(printed.contains("rear.mp4: extraction"), "{printed}");
+    assert!(
+        printed.contains("Track 0 is track 1 of 20260604_122323E.MP4"),
+        "{printed}"
+    );
+    assert!(printed.contains("carried across as bytes"), "{printed}");
+    assert!(printed.contains("faces, number plates"), "{printed}");
+    assert!(
+        out(&both_run).contains("both.mp4: two_track_archive"),
+        "{}",
+        out(&both_run)
+    );
+    let json: serde_json::Value = serde_json::from_str(&out(&front_run)).unwrap();
+    assert_eq!(json["manifest"]["produced"]["operation"]["kind"], "export");
+    assert_eq!(json["manifest"]["produced"]["operation"]["class"], "extraction");
+    assert_eq!(json["manifest"]["produced"]["operation"]["masking"], "none");
+    assert_eq!(
+        json["manifest"]["produced"]["operation"]["sources"][0]["tracks"][0]["index"],
+        0
+    );
+    assert_eq!(json["report"]["tracks"].as_array().unwrap().len(), 2);
+    for output in [&rear, &front, &both] {
+        let manifest = directory.path().join(format!(
+            "{}.manifest.json",
+            output.file_name().unwrap().to_str().unwrap()
+        ));
+        assert!(manifest.is_file(), "{}", manifest.display());
+        let verified = run(&["verify", manifest.to_str().unwrap(), output.to_str().unwrap()]).unwrap();
+        assert_eq!(verified.status.code(), Some(0), "{}", out(&verified));
+        assert!(!directory.path().join("rear.part").exists());
+    }
+}
+
+#[test]
+fn export_refuses_a_rear_camera_the_recording_does_not_have_and_a_track_that_does_not_exist() {
+    // Arrange
+    let directory = Temporary::new("export-refusals");
+    let single = corpus()
+        .into_iter()
+        .find(|spec| spec.name == "rewritten")
+        .unwrap();
+    let clip = directory.path().join("single.mp4");
+    build(&single).unwrap().write_to(&clip).unwrap();
+    let out_path = directory.path().join("out.mp4");
+
+    // Act
+    let rear = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        out_path.to_str().unwrap(),
+    ])
+    .unwrap();
+    let missing = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--tracks",
+        "0,7",
+        "--out",
+        out_path.to_str().unwrap(),
+    ])
+    .unwrap();
+
+    // Assert
+    assert_eq!(rear.status.code(), Some(2));
+    assert!(err(&rear).contains("no rear camera"), "{}", err(&rear));
+    assert_eq!(missing.status.code(), Some(2));
+    assert!(err(&missing).contains("no track 7"), "{}", err(&missing));
+    assert!(!out_path.exists());
+    assert!(!directory.path().join("out.part").exists());
+}
+
+#[test]
+fn export_joins_two_recordings_into_one_two_track_file() {
+    // Arrange
+    let directory = Temporary::new("export-join");
+    let front_file = write_reference_like(directory.path(), "20260604_122323_F.mp4").unwrap();
+    let rear_file = write_reference_like(directory.path(), "20260604_122323_R.mp4").unwrap();
+    let joined = directory.path().join("joined.mp4");
+
+    // Act
+    let output = run(&[
+        "export",
+        front_file.to_str().unwrap(),
+        rear_file.to_str().unwrap(),
+        "--out",
+        joined.to_str().unwrap(),
+        "--format",
+        "json",
+    ])
+    .unwrap();
+
+    // Assert
+    assert_eq!(output.status.code(), Some(0), "{}", err(&output));
+    let json: serde_json::Value = serde_json::from_str(&out(&output)).unwrap();
+    assert_eq!(
+        json["manifest"]["produced"]["operation"]["class"],
+        "two_track_archive"
+    );
+    assert_eq!(
+        json["manifest"]["produced"]["operation"]["sources"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(json["report"]["renumbered"], true);
+    assert_eq!(json["report"]["tracks"].as_array().unwrap().len(), 3);
+    assert_eq!(json["manifest"]["tracks"].as_array().unwrap().len(), 3);
+    let inspected = run(&["inspect", joined.to_str().unwrap()]).unwrap();
+    assert!(out(&inspected).contains("3 track(s)"), "{}", out(&inspected));
+}

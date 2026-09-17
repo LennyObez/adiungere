@@ -73,22 +73,17 @@ impl FromStr for Digest {
         if text.len() != 64 {
             return Err(error());
         }
+        // The standard parser accepts a sign and surrounding space, which a digest never carries, so each
+        // pair is checked to be two hexadecimal digits before it is parsed.
         let mut bytes = [0u8; 32];
         for (slot, pair) in bytes.iter_mut().zip(text.as_bytes().as_chunks::<2>().0) {
-            let high = hex_value(pair[0]).ok_or_else(error)?;
-            let low = hex_value(pair[1]).ok_or_else(error)?;
-            *slot = (high << 4) | low;
+            if !pair.iter().all(u8::is_ascii_hexdigit) {
+                return Err(error());
+            }
+            let pair = std::str::from_utf8(pair).map_err(|_| error())?;
+            *slot = u8::from_str_radix(pair, 16).map_err(|_| error())?;
         }
         Ok(Self(bytes))
-    }
-}
-
-fn hex_value(character: u8) -> Option<u8> {
-    match character {
-        b'0'..=b'9' => Some(character - b'0'),
-        b'a'..=b'f' => Some(character - b'a' + 10),
-        b'A'..=b'F' => Some(character - b'A' + 10),
-        _ => None,
     }
 }
 
@@ -136,13 +131,14 @@ pub fn file_digest<S: Source>(source: &mut S) -> Result<(Digest, u64), Error> {
 fn digest_in_steps<S: Source>(source: &mut S, step: u64) -> Result<(Digest, u64), Error> {
     let length = source.length()?;
     let mut hasher = Sha256::new();
-    let mut offset = 0u64;
+    // The offsets are enumerated by a range, so the walk ends by construction and no loop condition has
+    // to be trusted; a step of zero is read as one byte rather than as a walk that never ends.
+    let stride = usize::try_from(step.max(1)).unwrap_or(usize::MAX);
 
-    while offset < length {
+    for offset in (0..length).step_by(stride) {
         let this_step = (length - offset).min(step.max(1));
         let bytes = source.read_range(offset, usize::try_from(this_step).unwrap_or(usize::MAX))?;
         hasher.update(&bytes);
-        offset = offset.saturating_add(this_step);
     }
 
     Ok((Digest(hasher.finalize().into()), length))

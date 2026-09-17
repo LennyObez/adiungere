@@ -50,6 +50,12 @@
     "scan.unpaired": "{name}: named as one camera of a pair; its counterpart was not found.",
     "scan.not.recognised": "{name}: not recognised as a dashcam recording by name or by structure.",
     "scan.not.readable": "{name}: could not be read: {reason}.",
-    "scan.skipped": "{count} file(s) were not opened, because their extension is not one a recording carries."
+    "scan.skipped": "{count} file(s) were not opened, because their extension is not one a recording carries.",
+    "export.written": "{name}: {class}, {bytes} bytes, {count} track(s). The coded samples were copied byte for byte and the movie box precedes the media data.",
+    "export.track": "Track {output} is track {source} of {name}: {samples} samples, {bytes} bytes, fingerprint identical to the source.",
+    "export.preserved": "{count} box(es) carried across as bytes, not interpreted: {list}.",
+    "export.preserved.none": "No recorder box was carried across, because the source holds none or the plan left them out.",
+    "export.manifest": "The manifest of this file is at {path}; it records the sources and their fingerprints.",
+    "export.faces": "This export shows faces, number plates, and the time and position the recorder wrote into the picture. Sharing it publicly may be subject to data-protection rules; the originals stay on this device."
   }
 }

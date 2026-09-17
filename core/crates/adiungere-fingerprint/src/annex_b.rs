@@ -140,9 +140,13 @@ fn units_of(sample: &[u8], nal_length_size: u8) -> Option<Vec<&[u8]>> {
 
     while at < sample.len() {
         let prefix = sample.get(at..at.checked_add(width)?)?;
-        let length = prefix
-            .iter()
-            .fold(0usize, |acc, byte| (acc << 8) | usize::from(*byte));
+        // The prefix is a big-endian number of one to four bytes: right-aligned into four, it is the
+        // number itself.
+        let mut padded = [0u8; 4];
+        padded
+            .get_mut(4usize.checked_sub(width)?..)?
+            .copy_from_slice(prefix);
+        let length = usize::try_from(u32::from_be_bytes(padded)).ok()?;
         let start = at.checked_add(width)?;
         let end = start.checked_add(length)?;
         units.push(sample.get(start..end)?);

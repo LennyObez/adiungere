@@ -17,6 +17,7 @@ serde = { workspace = true }
 
 [dev-dependencies]
 adiungere-fixtures = { path = "../adiungere-fixtures" }
+sha2 = { workspace = true }
 
 [lints]
 workspace = true

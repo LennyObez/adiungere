@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use adiungere_fixtures::{Spec, build, corpus};
-use adiungere_scan::{Camera, Recording, ScanCache, Signal, scan};
+use adiungere_scan::{CACHE_FORMAT, Camera, Probe, Recording, ScanCache, Signal, scan};
 
 /// A directory that exists for one test and is removed when the test ends, whichever way it ends.
 struct Temporary(PathBuf);
@@ -204,4 +204,68 @@ fn a_cache_of_another_format_is_started_afresh_rather_than_trusted() {
     // Assert
     assert_eq!(cache.format, "adiungere-scan-cache/1");
     assert!(cache.entries.is_empty());
+}
+
+#[test]
+fn a_cache_that_does_not_parse_or_does_not_exist_starts_empty_and_a_saved_one_reloads() {
+    // Arrange
+    let directory = Temporary::new("cache-files");
+    let garbled = directory.path().join("garbled.json");
+    std::fs::write(&garbled, "{ this is not json").unwrap();
+    let absent = directory.path().join("absent.json");
+    let saved = directory.path().join("saved.json");
+    let mut cache = ScanCache::new();
+    cache.insert(
+        "a.mp4",
+        100,
+        7,
+        Probe {
+            name: "a.mp4".to_owned(),
+            size: 100,
+            parsed: None,
+            container: None,
+            unreadable: None,
+            bytes_read: 0,
+        },
+    );
+
+    // Act
+    let from_garbled = ScanCache::load(&garbled).unwrap();
+    let from_absent = ScanCache::load(&absent).unwrap();
+    cache.save(&saved).unwrap();
+    let reloaded = ScanCache::load(&saved).unwrap();
+
+    // Assert
+    assert_eq!(from_garbled, ScanCache::new());
+    assert_eq!(from_absent, ScanCache::new());
+    assert_eq!(from_absent.format, CACHE_FORMAT);
+    assert_eq!(reloaded, cache);
+    assert!(reloaded.get("a.mp4", 100, 7).is_some());
+}
+
+#[test]
+fn the_cache_key_is_the_modification_time_the_file_carries() {
+    // A file whose modification time is set by hand is probed, and the cache entry carries that time.
+
+    // Arrange
+    let directory = Temporary::new("mtime");
+    let path = write(directory.path(), "20260604_122323E.MP4", &Spec::reference_like()).unwrap();
+    let stamp = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(stamp)
+        .unwrap();
+    let mut cache = ScanCache::new();
+
+    // Act
+    let scanned = scan(&[directory.path().to_path_buf()], Some(&mut cache));
+
+    // Assert
+    assert_eq!(scanned.recordings.len(), 1);
+    let entry = cache.entries.values().next().unwrap();
+    assert_eq!(cache.entries.len(), 1);
+    assert_eq!(entry.modified, 1_600_000_000);
+    assert_eq!(entry.size, std::fs::metadata(&path).unwrap().len());
 }
