@@ -70,6 +70,19 @@ if ! ls "$root"/.tools/*/bin/ffmpeg >/dev/null 2>&1; then
     exit 1
 fi
 
+# The policy checker at the version pinned in tools/versions.toml, which is the version the supply-chain
+# pipeline's action bundles: the gate and the pipeline then read the policy the same way, and a version
+# that moves is a pin that moves. The pin is read from the file, never written here.
+deny_pinned=$(awk '$0 == "[cargo-deny]" { inside = 1; next } /^\[/ { inside = 0 } inside && $1 == "version" { gsub(/"/, "", $3); print $3; exit }' "$root/tools/versions.toml")
+deny_installed=$(cargo deny --version | awk '{ print $2 }')
+if [ -z "$deny_pinned" ] || [ "$deny_installed" != "$deny_pinned" ]; then
+    printf '\ncargo-deny %s is installed and tools/versions.toml pins %s, so the gate cannot run in full.\n' \
+        "$deny_installed" "$deny_pinned"
+    printf 'A step that did not run is not a step that passed. Install the pinned version and run this again:\n'
+    printf '    cargo install cargo-deny --locked --version %s\n' "$deny_pinned"
+    exit 1
+fi
+
 printf 'Gate sequence, from docs/testing.md\n\n'
 
 run 'formatting' cargo fmt --manifest-path "$workspace" --all --check
@@ -88,6 +101,6 @@ run 'advisories, licences, sources and bans' cargo deny --manifest-path "$worksp
 # The fuzzing project is its own package, outside the workspace, with its own lock file: the same policy
 # applies to it, or its engine's licence goes unchecked.
 run 'the same policy over the fuzzing project' \
-    cargo deny --manifest-path "$root/core/fuzz/Cargo.toml" check --config "$root/core/deny.toml"
+    cargo deny --manifest-path "$root/core/fuzz/Cargo.toml" --config "$root/core/deny.toml" check
 
 printf '\nEvery step ran and every step passed. Output is in %s\n' "$output"

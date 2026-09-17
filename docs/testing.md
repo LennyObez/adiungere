@@ -134,7 +134,7 @@ first red.
 | 9 | The published site | `scripts/check-site.sh`: nothing loaded from another host, security contact current |
 | 10 | Shell scripts | `shellcheck scripts/*.sh` |
 | 11 | Advisories, licences, sources and bans | `cargo deny check` |
-| 12 | The same policy over the fuzzing project | `cargo deny --manifest-path core/fuzz/Cargo.toml check --config core/deny.toml` |
+| 12 | The same policy over the fuzzing project | `cargo deny --manifest-path core/fuzz/Cargo.toml --config core/deny.toml check` |
 | 13 | Golden and property suites | M2, with the first export writer, over the fixture corpus |
 | 14 | Mutation testing, fuzzing, undefined-behaviour checking | nightly pipeline, through scripts/nightly.sh |
 | 15 | Cross-platform and WebAssembly build matrix | pull-request pipeline, the four matrix jobs of the core workflow |

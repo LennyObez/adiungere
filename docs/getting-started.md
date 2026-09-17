@@ -8,7 +8,7 @@ What you need, how to build it, and how to run every gate the pipeline runs.
 |---|---|---|
 | Rust, at the pinned version | The core, the command line and the guarantee suite | Installed automatically by `rustup` from `rust-toolchain.toml` |
 | `git` | The guarantee suite lists tracked files through it | Your package manager |
-| `cargo-deny` | Advisories, licences, sources and bans | `cargo install cargo-deny --locked` |
+| `cargo-deny` | Advisories, licences, sources and bans, at the version pinned in `tools/versions.toml`; the gate refuses another | `cargo install cargo-deny --locked --version <the pinned one>` |
 | `shellcheck` | The scripts under `scripts/` are checked like any other source | Your package manager |
 | `python3` on the pinned line | Runs the reference fingerprint script, which the guarantee suite compares with the product | Your package manager; the line is in `tools/versions.toml` |
 | The pinned media tool | Its elementary stream output is what the secondary digest is defined against | `scripts/fetch-tools.sh`, which places it under `.tools/` after checking its digest |

@@ -38,3 +38,8 @@ version = "0.13.1"
 [cargo-mutants]
 # The driver that mutates the sources and runs the tests against each mutant.
 version = "27.0.0"
+
+[cargo-deny]
+# The checker of advisories, licences, sources and bans. The gate refuses another version, so that the
+# gate and the supply-chain pipeline, whose action bundles this version, read the policy the same way.
+version = "0.20.2"

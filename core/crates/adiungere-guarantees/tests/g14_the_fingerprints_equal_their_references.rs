@@ -62,15 +62,32 @@ fn pinned(table: &str, key: &str) -> Option<String> {
     None
 }
 
+/// Whether a candidate media tool sits where the versions file says the fetched one is, or on the path,
+/// and reports the pinned version. The versions file decides acceptance and nothing else: no value read
+/// from it becomes part of a command.
+fn is_the_pinned_ffmpeg(candidate: &Path, tools: &Path) -> bool {
+    let Some(version) = pinned("ffmpeg", "version") else {
+        return false;
+    };
+    let Some(binary) = pinned("ffmpeg.linux-x86_64", "binary") else {
+        return false;
+    };
+    if candidate.starts_with(tools) && candidate != tools.join(binary) {
+        return false;
+    }
+    let Ok(output) = Command::new(candidate).arg("-version").output() else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .is_some_and(|first| first.contains(&version))
+}
+
 /// The pinned media tool, from the fetched tools directory or the path, at the pinned version only.
 ///
-/// The candidates come from listing the tools directory, never from a value read out of a file, so the
-/// only thing the versions file decides is which candidate is accepted: the one that reports the pinned
-/// version, whose location then has to be the one the versions file names.
+/// The candidates come from listing the tools directory, never from a value read out of a file.
 fn pinned_ffmpeg() -> Result<PathBuf, String> {
-    let version = pinned("ffmpeg", "version").ok_or("tools/versions.toml pins no media tool")?;
-    let binary = pinned("ffmpeg.linux-x86_64", "binary")
-        .ok_or("tools/versions.toml names no binary for linux-x86_64")?;
     let tools = repository_root().join(".tools");
     let mut candidates: Vec<PathBuf> = std::fs::read_dir(&tools)
         .map(|entries| {
@@ -82,43 +99,38 @@ fn pinned_ffmpeg() -> Result<PathBuf, String> {
         .unwrap_or_default();
     candidates.push(PathBuf::from("ffmpeg"));
 
-    for candidate in candidates {
-        if candidate.starts_with(&tools) && candidate != tools.join(&binary) {
-            continue;
-        }
-        let output = Command::new(&candidate).arg("-version").output();
-        if let Ok(output) = output {
-            let first = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .to_owned();
-            if first.contains(&version) {
-                return Ok(candidate);
-            }
-        }
-    }
+    candidates
+        .into_iter()
+        .find(|candidate| is_the_pinned_ffmpeg(candidate, &tools))
+        .ok_or_else(|| {
+            "the media tool at the version pinned in tools/versions.toml was not found. Run \
+             scripts/fetch-tools.sh; a guarantee that skipped it would be a guarantee that proved nothing"
+                .to_owned()
+        })
+}
 
-    Err(format!(
-        "the media tool at version {version} was not found. Run scripts/fetch-tools.sh; a guarantee that \
-         skipped it would be a guarantee that proved nothing"
-    ))
+/// Whether a candidate interpreter is on the pinned release line.
+fn is_the_pinned_python(candidate: &str) -> bool {
+    let Some(line) = pinned("python", "version") else {
+        return false;
+    };
+    let Ok(output) = Command::new(candidate).arg("--version").output() else {
+        return false;
+    };
+    let text = String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr);
+    text.contains(&format!("Python {line}."))
 }
 
 fn python() -> Result<PathBuf, String> {
-    let line = pinned("python", "version").ok_or("tools/versions.toml pins no interpreter")?;
-    for candidate in ["python3", "python"] {
-        if let Ok(output) = Command::new(candidate).arg("--version").output() {
-            let text = String::from_utf8_lossy(&output.stdout).to_string()
-                + &String::from_utf8_lossy(&output.stderr);
-            if text.contains(&format!("Python {line}.")) {
-                return Ok(PathBuf::from(candidate));
-            }
-        }
-    }
-    Err(format!(
-        "no interpreter on the {line} line was found; the reference script cannot be compared"
-    ))
+    ["python3", "python"]
+        .into_iter()
+        .find(|candidate| is_the_pinned_python(candidate))
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            "no interpreter on the release line pinned in tools/versions.toml was found; the reference \
+             script cannot be compared"
+                .to_owned()
+        })
 }
 
 /// Writes every non-sparse corpus recording into a directory, or reports the first failure.
