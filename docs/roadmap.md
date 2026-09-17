@@ -91,13 +91,24 @@ and the unknown top-level box byte for byte, moov before mdat, per-track fingerp
 byte-identical output on Linux, macOS and Windows, an independent parser reads the same sample counts, and the
 rear-only file plays in the gallery applications of at least Windows and Android.*
 
-- [ ] Two-pass writer, moov first, deterministic interleaving, promotion to 64-bit offsets, streaming output
-- [ ] Sample tables rebuilt for a subset of tracks, edit lists kept
-- [ ] Vendor and unknown boxes copied as ranges, with the offset policy the probe settles
-- [ ] Two-track archive with no encoder, including joining two paired files into one two-track file
-- [ ] Export command with a manifest and a remux report, progress and cancellation
-- [ ] Golden tests per mode, property tests over the corpus, independent parsers as oracles
-- [ ] Architecture tests: no typed vendor container, no encoder symbol in the released binary
+- [x] Two-pass writer, moov first, deterministic interleaving, promotion to 64-bit offsets, streaming output
+- [x] Sample tables rebuilt for a subset of tracks, edit lists kept
+- [x] Vendor and unknown boxes copied as ranges, verbatim and at the same position relative to the movie
+      box, because P02 measured no absolute offset in the telemetry payload
+- [x] Two-track archive with no encoder, including joining two paired files into one two-track file
+- [x] Export command with a manifest and a remux report, progress and cancellation
+- [x] Golden tests per mode, property tests over the corpus, independent parsers as oracles
+- [x] Architecture tests: no typed vendor container, no encoder symbol in the released binary
+- [ ] The rear-only export played in the gallery applications of Windows and Android, recorded as P40 with
+      the device, the version and the date, because that part of the demonstration is outside any pipeline
+
+The writer copies the recorder's boxes as the ranges the reader found them in and rebuilds only the chunk
+offset tables, so the sample description entries, the edit lists and the vendor boxes reach the output as
+the bytes they were. The export refuses its own output when a track read back does not carry its source's
+fingerprint, and removes it. The demonstration of this milestone has two halves: the reference recording's
+rear-only export carried the telemetry box and the model code byte for byte, decoded without a complaint
+under the pinned media tool with the same packet counts, and verified identical on every subject; the
+gallery half is a person playing that file, and stays open until P40 records it.
 
 ## M3: Provenance
 

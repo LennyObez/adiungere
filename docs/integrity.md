@@ -137,6 +137,43 @@ when it pre-allocates a file or loses power, and nothing when the file ends with
 file is inspected in full; a fingerprint over samples the file no longer holds is refused with the range
 that was asked for.
 
+### The operation
+
+A manifest says what produced it. An inspection carries its scope: the structure alone, or the whole file
+with every digest. An export carries three things, permanently and distinctly: its **class**, its
+**masking**, and its **sources**.
+
+The class is one of four words, and the sentence a surface shows about an output derives from this word
+and from nothing else. An `extraction` copies the samples of one camera and the audio byte for byte into
+a new container. A `two_track_archive` copies both cameras and the audio into one file with two video
+tracks, as the recorder wrote them, whether they came from one recording or from the two files of a
+recorder that writes one per camera. A `rendition_lossy` is a composition that went through an encoder,
+and a `rendition_lossless_verified` is a composition whose decoded pictures were compared with the source's
+and found equal, a label that is never given before that comparison has run. The first two are stream
+copies and carry the source's fingerprints; the last two carry the source's fingerprints as ingredients
+and never the sentence that says a track is identical to its source.
+
+The masking is `none`, `faces_and_plates`, or `faces_plates_and_strip`, the last covering the position and
+clock the recorder burns into the picture. It is a choice a person makes at export and never a default: a
+file for a claim or a court keeps faces and plates, because the reader needs them and a masked file is a
+re-encoded composition that is no longer the evidence; a file for publication is masked. An extraction and
+a two-track archive always carry `none`, since a masked output is by definition re-encoded.
+
+Each source is named by its file name, its size, its whole-file digest, and the tracks taken from it, each
+with the index it had in the source, the index it has in the output, and the fingerprint it had in the
+source. `adiungere export` reads its output back and refuses to keep it unless every track's fingerprint
+in the output equals the fingerprint recorded here; a refused output is removed.
+
+```console
+$ adiungere export <recording> --camera rear --out rear.mp4
+$ adiungere fingerprint rear.mp4 --format json | jq '.tracks[].fingerprint.payload_sha256'
+$ jq '.produced.operation.sources[].tracks[].fingerprint.payload_sha256' rear.mp4.manifest.json
+```
+
+The two lists are equal, track for track, and the second one is what the source recording's own
+`fingerprint` prints for the tracks that were taken. A third party checks the extraction the same way,
+with the reference script of this document on both files.
+
 ## Comparing a manifest with a file
 
 `adiungere verify manifest.json clip.mp4` compares subject by subject: the whole file, each track, each

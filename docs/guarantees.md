@@ -43,6 +43,12 @@ contiguous range.
 | G18 | One flipped byte in a sample is that track's finding and the whole file's and nothing else; one flipped byte in a vendor box, under user data or at the top level, is that box's finding and the whole file's and nothing else | [`docs/integrity.md`](integrity.md) |
 | G19 | Inspecting a recording's structure reads fewer than 256 kibibytes and never touches the media data box, measured through a counting source on every corpus recording, with the movie box first and last | [ADR-0004](adr/0004-boxes-are-opaque-byte-ranges.md) |
 | G20 | Every probe in the register names a milestone the roadmap has and is named in that milestone's own prose, and the roadmap mentions no probe the register does not hold; a register that has drifted in shape is refused rather than read partially | [`docs/evidence.md`](evidence.md) |
+| G21 | Every export mode of every corpus recording, written and read back, carries every user-data child and every unknown top-level box byte for byte, places the movie box before the media data, and gives every kept track the fingerprint and the elementary stream digest it had in the source; a vendor box short of one byte is seen to fail the comparison | [ADR-0006](adr/0006-every-export-goes-through-the-core.md) |
+| G22 | The digests of the three export modes of the reference-like recording are pinned in the reader crate's own tests and are what the writer produces; the platform matrix runs that suite on Linux, macOS on both architectures and Windows, and excludes nothing that carries a pin. The WebAssembly writer joins the comparison at M4 | [ADR-0006](adr/0006-every-export-goes-through-the-core.md) |
+| G23 | The pinned media tool counts, for every export mode of every corpus recording, the same packets per stream as the product wrote samples, and decodes every stream without a word on its error stream; a truncated export is seen to draw a complaint | [`docs/integrity.md`](integrity.md) |
+| G24 | No source file of the reading crates opens a file for writing, moves, copies, truncates or re-dates one, the scan cache excepted for its own file; and every command of the product, run on a recording, leaves that recording's digest and modification time exactly as they were. Each shell adds its own scripted session, from M4 to M8 | [ADR-0006](adr/0006-every-export-goes-through-the-core.md) |
+| G25 | No crate of the resolved dependency graph is an encoder, a media framework that bundles one, or a binding named after one; and the release command line, built with its symbol table kept, carries no defined or imported symbol from the forbidden list, read with the toolchain's symbol reader after a fixture carrying one such name has been refused first | [ADR-0006](adr/0006-every-export-goes-through-the-core.md) |
+| G26 | Every sign the derivative detector declares is raised by at least one corpus recording scanned as one population, the reference-like recording raises none, each sign is worded from the catalogue in the command line's description, and a container whose name fits no grammar is described as unplaced and never as clean | [ADR-0005](adr/0005-the-product-never-returns-a-verdict.md) |
 | G52 | The ledger accounts for every identifier exactly once; the enforced tables list exactly the guarantees the suite holds and each of those holds a test; the README's counts of guarantees and probes and the changelog's count of decision records match the repository; and the gate sequence the documentation lists is the one the script runs, in both directions and in order | this document |
 | G54 | Nothing the ignore file refuses is tracked, under any casing, with the rules read from the ignore file itself; and no tracked file exceeds one mebibyte, because source is never that large and a recording or a build artefact is | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 
@@ -54,16 +60,9 @@ and this repository is not one, so the suite holds the door instead.
 
 ## Committed, with the milestone that will enforce each
 
-### M2, lossless extraction
-
-| Id | Guarantee |
-|---|---|
-| G21 | Every lossless export preserves the vendor telemetry box and the unknown top-level box byte for byte, writes the movie box first, and produces fingerprints equal to the source |
-| G22 | The same input and the same plan produce identical bytes on Linux, macOS and Windows, and from M4 in WebAssembly |
-| G23 | The rebuilt sample tables are coherent and an independent parser counts the same samples |
-| G24 | No surface ever opens a source for writing, proved by a reader type with no write capability and by digests taken before and after a scripted session |
-| G25 | The stream-copy path links no encoder, proved by the dependency tree and by inspecting the released binary for encoder symbols |
-| G26 | The derivative detector raises its banner on every signal in the fixture corpus |
+Two of the enforced guarantees grow with the surfaces: **G22** compares the WebAssembly writer from M4, and
+**G24** adds a scripted session for each shell from M4 to M8. Neither is listed again below, because the
+test that holds each already exists and the extension is a row in that test, not a new guarantee.
 
 ### M3, provenance
 

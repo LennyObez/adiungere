@@ -19,7 +19,7 @@ because one repository publishes several things.
   with no trailers; no update check in any application; and the verification surface named for a place
   rather than for a conclusion.
 - Roadmap of eleven milestones, each ending in a named demonstration, with the first real product at M4.
-- Evidence register of 39 probes, each with a question, a method, the decision it settles and one of four
+- Evidence register of 40 probes, each with a question, a method, the decision it settles and one of four
   verdicts, where `unavailable` and `not started` are never read as a pass.
 - Command line reading that register as data: a listing that filters by verdict and milestone, a detail view,
   and a reconciliation that fails when the register and the roadmap disagree. Its parser refuses a register
@@ -79,5 +79,31 @@ because one repository publishes several things.
   types the user-data box; the fingerprints equal their references; the reader never panics; no wording
   reads as a verdict; every time names its clock; one flipped byte is one finding; an inspection is
   bounded.
+- Remuxer over the box reader: a subset of tracks from one or two recordings written to a new container
+  in two passes, the movie box first, chunks interleaved by decode time in a fixed order, every coded
+  sample copied byte for byte, every user-data child and every unknown top-level box carried across as
+  the bytes they were, the sample description entries and the edit lists untouched, and only the chunk
+  offset tables rebuilt, widened to 64 bits when the media reaches past four gibibytes. Two inputs are
+  joined into one file with the tracks renumbered. Progress is reported and a cancellation removes
+  everything written.
+- Command line `export`: one camera, both, or the tracks named, from one recording or from the two files
+  of a recorder that writes one per camera; a manifest written beside the output naming each source, its
+  digest and the fingerprint of every track; the output read back and refused, and removed, when a track
+  does not carry its source's fingerprint; a progress line and a clean stop on interruption.
+- Manifest operation for an export, with the export class and the masking choice recorded permanently:
+  an extraction, a two-track archive, a lossy rendition or a rendition verified lossless, and no masking,
+  faces and plates, or faces, plates and the burned-in strip.
+- Golden digests of the three export modes pinned in the reader crate's tests and run on every platform
+  of the matrix; property tests over every export mode of every corpus recording; the pinned media tool
+  counting packets and decoding every export as an independent parser.
+- Encoder symbol check over the release command line with the toolchain's own symbol reader, refusing a
+  fixture that carries one forbidden name before it judges the product, run by the gate and the pipeline.
+- The derivative detector assesses a container whose name fits no grammar with the signs any container
+  shows, and the command line describes such a file as unplaced rather than as not recognised.
+- Six further guarantees enforced, each watched failing: every export preserves the recorder; the same
+  input writes the same bytes everywhere; an independent parser reads the same samples; no surface opens a
+  source for writing; the stream copy links no encoder; the detector raises every sign on the corpus.
+- Probe P40 for the half of the extraction demonstration no pipeline can run: the rear-only export
+  played in the gallery applications of Windows and Android.
 
 [Unreleased]: https://github.com/LennyObez/adiungere/commits/main

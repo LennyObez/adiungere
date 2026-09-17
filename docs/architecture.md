@@ -49,17 +49,17 @@ the platforms that can remux by themselves. Their writers would drop the vendor 
 
 | Crate | Responsibility | Milestone |
 |---|---|---|
-| `adiungere-isobmff` | Box tree as opaque ranges by default, sample iterator in decode order, one sans-I/O reader behind a synchronous and an asynchronous driver; remuxer and finalise step | **present**; remuxer M2 |
+| `adiungere-isobmff` | Box tree as opaque ranges by default, sample iterator in decode order, one sans-I/O reader behind a synchronous and an asynchronous driver; remuxer writing a subset of tracks from one or two recordings with the recorder's boxes carried across as bytes; finalise step for a platform-encoded rendition | **present**; finalise M4 |
 | `adiungere-fingerprint` | Track fingerprint, decoder configuration digest, secondary elementary-stream digest, file digest, structural fingerprint | **present** |
 | `adiungere-scan` | Naming grammars by shape, bounded metadata probe, paired-file sources, the signs of a rewrite, a probe cache | **present** |
 | `adiungere-manifest` | Manifest types, canonical serialisation, published schema, comparison as findings, the wording catalogue | **present** |
 | `adiungere-fixtures` | The synthetic corpus, built from three committed streams with no encoder | **present** |
 | `adiungere-provenance` | Content Credentials: ingredients, actions, integrity assertion, placement, time stamping | M3 |
 | `adiungere-telemetry` | Read-only, best-effort vendor telemetry parser that degrades to bytes preserved | M6 |
-| `adiungere-core` | The public API facade | M2 |
+| `adiungere-core` | The public API facade, written when the first surface other than the command line consumes it, so that it is shaped by a consumer rather than guessed | M4 |
 | `adiungere-ffi` | Foreign function surface for Swift and Kotlin, with generated bindings committed | M7 |
 | `adiungere-wasm` | Browser surface with a segmented reader and writer | M4 |
-| `adiungere-cli` | The executable specification: inspect, fingerprint, detect, verify, report, probes; export at M2 | **present** |
+| `adiungere-cli` | The executable specification: inspect, fingerprint, detect, verify, report, export, probes | **present** |
 | `adiungere-relay` | The minimal signing and time-stamping service | M4 |
 | `adiungere-guarantees` | The repository guarantee suite | **present** |
 
@@ -117,6 +117,9 @@ core recomputes, and the two are compared without an account and without an uplo
 
 ## What exists today
 
-The Rust workspace, the guarantee suite, the evidence register and the command that reads it, the governance
-of the repository, and a static page that says honestly that the product is not built yet. Everything else in
-this document is a commitment with a milestone against it.
+The Rust workspace with the reader, the fingerprints, the manifest, the scanner and the remuxer; a command
+line that inspects, fingerprints, detects, verifies, reports and exports; the synthetic corpus; the
+guarantee suite; the evidence register and the command that reads it; the governance of the repository; and
+a static page that says honestly that the product is not built yet. Nothing plays a recording, nothing
+signs one, and no surface other than the command line exists. Everything else in this document is a
+commitment with a milestone against it.

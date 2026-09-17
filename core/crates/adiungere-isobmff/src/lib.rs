@@ -20,7 +20,7 @@
 //! Nothing here panics on any input. Sizes are checked, depth and count are capped, and an inconsistency is
 //! an [`Error`] that names the box and the offset.
 //!
-//! Writing follows the same rule. [`remux`] rewrites a container around samples it never touches: the
+//! Writing follows the same rule. [`remux()`] rewrites a container around samples it never touches: the
 //! kept tracks' boxes are copied as the bytes they were read as, only the chunk offset tables are written
 //! afresh, the user-data box and the unknown top-level boxes are carried across, and the movie box comes
 //! first so the output plays as it arrives.

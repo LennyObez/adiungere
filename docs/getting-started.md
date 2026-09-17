@@ -6,7 +6,7 @@ What you need, how to build it, and how to run every gate the pipeline runs.
 
 | Tool | Why | How |
 |---|---|---|
-| Rust, at the pinned version | The core, the command line and the guarantee suite | Installed automatically by `rustup` from `rust-toolchain.toml` |
+| Rust, at the pinned version, with its formatter, linter and LLVM tools | The core, the command line and the guarantee suite; the LLVM tools carry the symbol reader that judges the release binary | Installed automatically by `rustup` from `rust-toolchain.toml`, components included |
 | `git` | The guarantee suite lists tracked files through it | Your package manager |
 | `cargo-deny` | Advisories, licences, sources and bans, at the version pinned in `tools/versions.toml`; the gate refuses another | `cargo install cargo-deny --locked --version <the pinned one>` |
 | `shellcheck` | The scripts under `scripts/` are checked like any other source | Your package manager |
@@ -53,12 +53,23 @@ $ target/release/adiungere fingerprint clip.mp4 --manifest clip.manifest.json
 $ target/release/adiungere verify clip.manifest.json clip.mp4
 $ target/release/adiungere report clip.manifest.json
 $ target/release/adiungere detect /media/card/ --cache ~/.cache/adiungere-scan.json
+$ target/release/adiungere export clip.mp4 --camera rear --out rear.mp4
+$ target/release/adiungere export clip.mp4 --camera both --out archive.mp4
+$ target/release/adiungere export front.mp4 rear.mp4 --out joined.mp4
+$ target/release/adiungere export clip.mp4 --tracks 1,2 --out chosen.mp4 --manifest chosen.json
 ```
 
 `inspect` reads the headers and the movie box and never the media, so it answers in milliseconds on any
 size of recording. `fingerprint` reads every byte. Every number either command prints is defined in
 [`integrity.md`](integrity.md) with the command a stranger runs to reproduce it. Add `--format json` to
 any of them for one document instead of prose.
+
+`export` never touches the recording it reads. It writes the output under a temporary name, reads it back,
+and keeps it only when every track carries its source's fingerprint; the manifest goes beside the output as
+`<output>.manifest.json` unless `--manifest` names another place. Progress is printed on the error stream,
+and an interruption removes the partial file. With two recordings, the front camera and the audio of the
+first and the first video track of the second are joined into one two-track file; with `--camera` or
+`--tracks` and one recording, the named cameras or the named track indices are taken.
 
 ## Read the evidence register
 

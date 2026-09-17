@@ -7,7 +7,9 @@ each one without re-encoding it, and keeps the vendor telemetry that every other
 The name is Latin: to join, to attach to. Two views of one moment, joined rather than separated.
 
 **Status: early construction.** The command line inspects a recording, fingerprints every track, finds
-recordings in a library and compares a manifest with a file; nothing plays or exports yet. What follows
+recordings in a library, exports either camera or both without re-encoding a sample and with the recorder's
+boxes carried across byte for byte, joins the two files of a recorder that writes one per camera, and
+compares a manifest with a file; nothing plays yet. What follows
 describes the product being built, and [Guarantees](#guarantees) separates the properties a test enforces
 today from those committed to, each against the milestone that will enforce it.
 [`docs/roadmap.md`](docs/roadmap.md) holds the plan.
@@ -136,6 +138,12 @@ reporting success.
 | G18 | A comparison that reports more, or less, than the one subject a flipped byte belongs to |
 | G19 | A structural inspection that reads 256 kibibytes or more, or touches the media data |
 | G20 | A probe the roadmap and the evidence register disagree about, or a register whose shape has drifted |
+| G21 | An export that loses one byte of a recorder's box, writes the movie box after the media, or gives a track a fingerprint other than its source's |
+| G22 | A writer whose output differs by one byte from the pinned digests, on any platform of the matrix |
+| G23 | An export in which the pinned media tool counts other packets than the samples written, or decodes with a complaint |
+| G24 | A reading crate that opens a file for writing, or a command that changes a recording's bytes or modification time |
+| G25 | An encoder crate in the resolved graph, or an encoder symbol in the release command line |
+| G26 | A sign the detector declares that no corpus recording raises, a sign without its phrase, or an unplaced file described as clean |
 | G52 | A count, a table or a documented gate step that no longer matches the repository |
 | G54 | A tracked file the ignore file says never enters the repository, or a tracked file larger than source ever is |
 
@@ -146,14 +154,14 @@ recording or a key at the door for a repository owned by a person, so the suite 
 
 ### Committed, with the milestone that will enforce each
 
-Thirty-two further guarantees are written down against the milestone that will enforce them, from the
-lossless extraction at M2 to the production signer chain at M9.
+Twenty-six further guarantees are written down against the milestone that will enforce them, from the
+provenance of M3 to the production signer chain at M9.
 [`docs/guarantees.md`](docs/guarantees.md) is the whole ledger.
 
 ## Evidence
 
 Every load-bearing assumption in this project is a **probe**: a question, the method that answers it, and the
-decision it settles. There are 39 of them, and the register says what is known about each in the only four
+decision it settles. There are 40 of them, and the register says what is known about each in the only four
 words it admits: `measured`, `reasoned`, `unavailable`, `not started`. The last two are never read as a pass.
 
 ```console
@@ -174,13 +182,19 @@ $ ./target/release/adiungere inspect clip.mp4
 $ ./target/release/adiungere fingerprint clip.mp4 --manifest clip.manifest.json
 $ ./target/release/adiungere verify clip.manifest.json clip.mp4
 $ ./target/release/adiungere detect /media/card/
+$ ./target/release/adiungere export clip.mp4 --camera rear --out rear.mp4
+$ ./target/release/adiungere export front.mp4 rear.mp4 --out both.mp4
 ```
 
 `inspect` reads the headers and never the media; `fingerprint` reads every byte and writes the manifest;
 `verify` compares a manifest with a file, subject by subject; `detect` finds recordings in files and
 directories and pairs the files of recorders that write one per camera; `report` renders a manifest with
-the commands that reproduce each number. Every command prints prose for a person or, with
-`--format json`, one document for a pipeline, and none of them returns a verdict about a recording.
+the commands that reproduce each number. `export` writes one camera, or both, or the tracks named with
+`--tracks`, copying every coded sample byte for byte, keeping the recorder's boxes, and placing the movie
+box first; given two files it joins the front of the first and the video of the second into one two-track
+file. It writes a manifest beside the output, reads the output back and refuses to keep it unless every
+track carries its source's fingerprint. Every command prints prose for a person or, with `--format json`,
+one document for a pipeline, and none of them returns a verdict about a recording.
 
 [`docs/getting-started.md`](docs/getting-started.md) has the tools, the gate sequence and where things are.
 
