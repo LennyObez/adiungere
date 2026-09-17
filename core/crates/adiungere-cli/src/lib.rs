@@ -15,5 +15,6 @@
 pub mod evidence;
 pub mod markdown;
 pub mod media;
+pub mod provenance;
 pub mod repository;
 pub mod roadmap;

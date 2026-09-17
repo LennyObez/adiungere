@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use adiungere_cli::media::{self, MediaFailure, Output, Rendered, Selection};
+use adiungere_cli::provenance;
 use adiungere_fingerprint::Digest;
 use adiungere_fixtures::{Spec, build};
 use adiungere_guarantees::{rust_code_only, tracked_text_files_under};
@@ -152,9 +153,14 @@ fn every_command_leaves_the_recording_it_is_given_exactly_as_it_was() {
     let manifest = directory.0.join("clip.manifest.json");
     let out = directory.0.join("out.mp4");
     let cache = directory.0.join("cache.json");
+    let signed = directory.0.join("signed.mp4");
     let stop = AtomicBool::new(false);
     let files = [clip.clone()];
     let pair = [clip.clone(), clip.clone()];
+    let signing = provenance::Signing {
+        credentialling: provenance::Credentialling::Ephemeral,
+        time_authority: None,
+    };
 
     // Act and assert, one command at a time, so the one that wrote is named.
     let steps: Vec<Step<'_>> = vec![
@@ -173,11 +179,33 @@ fn every_command_leaves_the_recording_it_is_given_exactly_as_it_was() {
         ),
         (
             "export rear",
-            Box::new(|| media::export(&files, &Selection::Rear, &out, None, Output::Json, &stop)),
+            Box::new(|| media::export(&files, &Selection::Rear, &out, None, None, Output::Json, &stop)),
         ),
         (
             "export join",
-            Box::new(|| media::export(&pair, &Selection::Both, &out, None, Output::Json, &stop)),
+            Box::new(|| media::export(&pair, &Selection::Both, &out, None, None, Output::Json, &stop)),
+        ),
+        (
+            "export signed",
+            Box::new(|| {
+                media::export(
+                    &files,
+                    &Selection::Rear,
+                    &signed,
+                    None,
+                    Some(&signing),
+                    Output::Json,
+                    &stop,
+                )
+            }),
+        ),
+        (
+            "sign beside",
+            Box::new(|| provenance::sign(&clip, &[], false, None, &signing, Output::Json)),
+        ),
+        (
+            "verify with credentials",
+            Box::new(|| media::verify(&manifest, &clip, Output::Text)),
         ),
     ];
     for (name, step) in steps {
@@ -217,6 +245,7 @@ fn an_export_asked_to_write_over_its_source_refuses_and_leaves_it_as_it_was() {
         &Selection::Rear,
         &same_by_another_route,
         None,
+        None,
         Output::Json,
         &stop,
     );
@@ -225,6 +254,7 @@ fn an_export_asked_to_write_over_its_source_refuses_and_leaves_it_as_it_was() {
         &Selection::Rear,
         &elsewhere,
         Some(&same_by_another_route),
+        None,
         Output::Json,
         &stop,
     );

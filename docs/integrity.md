@@ -125,7 +125,9 @@ it equal to the one the types derive. Unknown fields are refused on reading, so 
 version is refused rather than half-read.
 
 The canonical text form is what `adiungere fingerprint --format json` prints: two-space indentation, the
-fields in the order the schema lists them, digests in lower-case hexadecimal, a trailing newline.
+fields in the order the types declare them, digests in lower-case hexadecimal, a trailing newline. The
+schema file itself is written with every object's keys sorted, so that it reads the same whatever
+produced it.
 
 Two fields describe what a general-purpose reader would have hidden. A vendor box carries `standard`: true
 when its type is one the base media file format or its 3GPP extension defines under the user-data box,

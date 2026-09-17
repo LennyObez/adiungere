@@ -96,7 +96,7 @@ pub struct Credentials {
 /// Returns an error when the asset or the sidecar cannot be read, when the library refuses, or when
 /// neither an embedded manifest nor a sidecar exists.
 pub fn read(asset: &Path, sidecar: Option<&Path>) -> Result<Credentials, Error> {
-    let format = c2pa::format_from_path(asset).unwrap_or_else(|| "video/mp4".to_owned());
+    let format = crate::sign::format_of(asset);
     let stream = File::open(asset).map_err(|cause| Error::Io {
         path: asset.to_path_buf(),
         cause,

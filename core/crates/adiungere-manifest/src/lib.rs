@@ -70,7 +70,28 @@ impl From<adiungere_fingerprint::Error> for Error {
 pub fn schema() -> Result<String, serde_json::Error> {
     let generator = schemars::generate::SchemaSettings::draft2020_12().into_generator();
     let schema = generator.into_root_schema_for::<Manifest>();
-    let mut text = serde_json::to_string_pretty(&schema)?;
+    let mut text = serde_json::to_string_pretty(&with_keys_sorted(serde_json::to_value(schema)?))?;
     text.push('\n');
     Ok(text)
+}
+
+/// The same value with every object's keys in sorted order, however the JSON library orders them: the
+/// published schema is compared byte for byte, and that comparison must not depend on which crates were
+/// compiled alongside this one.
+fn with_keys_sorted(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries: Vec<(String, serde_json::Value)> = map.into_iter().collect();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            let mut sorted = serde_json::Map::new();
+            for (key, inner) in entries {
+                sorted.insert(key, with_keys_sorted(inner));
+            }
+            serde_json::Value::Object(sorted)
+        },
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(with_keys_sorted).collect())
+        },
+        other => other,
+    }
 }

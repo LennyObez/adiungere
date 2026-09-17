@@ -142,6 +142,62 @@ enum Command {
         #[arg(long, value_name = "PATH")]
         manifest: Option<PathBuf>,
 
+        /// Sign the output last, with Content Credentials embedded in it.
+        #[arg(long)]
+        sign: bool,
+
+        #[command(flatten)]
+        signing: SigningArgs,
+
+        /// How to print the answer.
+        #[arg(long, value_enum, default_value_t = Format::Text)]
+        format: Format,
+    },
+
+    /// Write Content Credentials for a file: beside a recording, which is never touched, or embedded into
+    /// a signed copy of an export.
+    Sign {
+        /// The file to sign.
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// The recordings the file was made from, in the order its manifest lists them; none for a
+        /// recording, whose only ingredient is itself.
+        #[arg(long, value_name = "PATH")]
+        source: Vec<PathBuf>,
+
+        /// Embed the credentials into a signed copy written at --out, instead of writing them beside
+        /// the file.
+        #[arg(long)]
+        embed: bool,
+
+        /// Where to write: the signed copy with --embed, the credentials file otherwise. Beside the file
+        /// under its stem with the `c2pa` extension when absent.
+        #[arg(long, value_name = "PATH")]
+        out: Option<PathBuf>,
+
+        #[command(flatten)]
+        signing: SigningArgs,
+
+        /// How to print the answer.
+        #[arg(long, value_enum, default_value_t = Format::Text)]
+        format: Format,
+    },
+
+    /// Ask a time-stamping authority for a token over a file, and write the token beside it.
+    Timestamp {
+        /// The file, typically a manifest.
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// The authority's address.
+        #[arg(long, value_name = "URL")]
+        time_authority: String,
+
+        /// Where to write the token; beside the file with `.tsr` appended when absent.
+        #[arg(long, value_name = "PATH")]
+        out: Option<PathBuf>,
+
         /// How to print the answer.
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
@@ -149,6 +205,47 @@ enum Command {
 
     /// Read the evidence register.
     Probes(Probes),
+}
+
+/// The credential a signing uses and the authority it asks for a time stamp.
+#[derive(Debug, Args)]
+struct SigningArgs {
+    /// The certificate chain, in PEM, end entity first. Without it, a credential is generated for the run
+    /// and is on no trust list.
+    #[arg(long, value_name = "PEM", requires = "key")]
+    chain: Option<PathBuf>,
+
+    /// The key of the chain's end entity, in PEM.
+    #[arg(long, value_name = "PEM", requires = "chain")]
+    key: Option<PathBuf>,
+
+    /// The algorithm the key is for: es256, es384, es512 or ed25519.
+    #[arg(long, value_name = "NAME", default_value = "es256")]
+    algorithm: String,
+
+    /// A time-stamping authority to ask at signing; the token goes inside the signature.
+    #[arg(long, value_name = "URL")]
+    time_authority: Option<String>,
+}
+
+impl SigningArgs {
+    fn signing(&self) -> Result<adiungere_cli::provenance::Signing, Failure> {
+        let credentialling = match (&self.chain, &self.key) {
+            (Some(chain), Some(key)) => adiungere_cli::provenance::Credentialling::Held {
+                chain: chain.clone(),
+                key: key.clone(),
+                algorithm: self
+                    .algorithm
+                    .parse()
+                    .map_err(|reason| Failure::Media(media::MediaFailure::Provenance { cause: reason }))?,
+            },
+            _ => adiungere_cli::provenance::Credentialling::Ephemeral,
+        };
+        Ok(adiungere_cli::provenance::Signing {
+            credentialling,
+            time_authority: self.time_authority.clone(),
+        })
+    }
 }
 
 /// Which camera an export keeps.
@@ -364,6 +461,8 @@ fn run() -> Result<Answer, Failure> {
             tracks,
             out,
             manifest,
+            sign,
+            signing,
             format,
         } => {
             let selection = match (tracks, camera) {
@@ -372,6 +471,7 @@ fn run() -> Result<Answer, Failure> {
                 (None, Camera::Rear) => media::Selection::Rear,
                 (None, Camera::Both) => media::Selection::Both,
             };
+            let signing = if sign { Some(signing.signing()?) } else { None };
             // An interrupt asks the export to stop at the next chunk; the partial output is then removed
             // rather than left looking finished. If no handler can be installed, the export still runs
             // and an interrupt ends the process the ordinary way.
@@ -381,12 +481,34 @@ fn run() -> Result<Answer, Failure> {
                 &selection,
                 &out,
                 manifest.as_deref(),
+                signing.as_ref(),
                 output(format),
                 &STOP,
             )
             .map(answer)
             .map_err(Failure::Media)
         },
+        Command::Sign {
+            file,
+            source,
+            embed,
+            out,
+            signing,
+            format,
+        } => {
+            let signing = signing.signing()?;
+            adiungere_cli::provenance::sign(&file, &source, embed, out.as_deref(), &signing, output(format))
+                .map(answer)
+                .map_err(Failure::Media)
+        },
+        Command::Timestamp {
+            file,
+            time_authority,
+            out,
+            format,
+        } => adiungere_cli::provenance::timestamp(&file, &time_authority, out.as_deref(), output(format))
+            .map(answer)
+            .map_err(Failure::Media),
         Command::Probes(probes) => run_probes(probes),
     }
 }

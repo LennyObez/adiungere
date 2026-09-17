@@ -24,6 +24,17 @@ url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09
 sha256 = "adb2d107287cdace0c5d00dd986cd3674c1e86776501640bff3b5cf7d2cf2e71"
 binary = "ffmpeg-n9.0.1-30-g9258bacca5-linux64-gpl-9.0/bin/ffmpeg"
 
+[c2patool]
+# The independent Content Credentials validator, from the maintainers of the standard's reference
+# implementation. The guarantee that holds an export's credentials valid runs it, and the value of that
+# guarantee is exactly that this tool is not this product.
+version = "0.27.22"
+
+[c2patool.linux-x86_64]
+url = "https://github.com/contentauth/c2pa-rs/releases/download/c2patool-v0.27.22/c2patool-v0.27.22-x86_64-unknown-linux-gnu.tar.gz"
+sha256 = "6f138ad53da1a62f1cd6ee71c60727efa27d13b811f4c0ea8c2a8528968b358b"
+binary = "c2patool/c2patool"
+
 [rust-nightly]
 # The dated nightly the fuzzer and the undefined-behaviour checker use, because both need instrumentation
 # a release compiler does not offer. It is a tool of the nightly pipeline, not the compiler the product is

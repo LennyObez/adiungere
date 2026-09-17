@@ -23,6 +23,7 @@ path = "src/main.rs"
 [dependencies]
 adiungere-isobmff = { path = "../adiungere-isobmff" }
 adiungere-manifest = { path = "../adiungere-manifest" }
+adiungere-provenance = { path = "../adiungere-provenance" }
 adiungere-scan = { path = "../adiungere-scan" }
 clap = { workspace = true }
 ctrlc = { workspace = true }

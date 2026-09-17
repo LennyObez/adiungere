@@ -69,9 +69,19 @@ pub fn sidecar_beside(asset: &Path) -> PathBuf {
     asset.with_extension("c2pa")
 }
 
-/// The media type the asset is signed as, from its extension.
-fn format_of(asset: &Path) -> String {
-    c2pa::format_from_path(asset).unwrap_or_else(|| "video/mp4".to_owned())
+/// The media type the asset is signed as, from its extension when it is one a recording carries, and the
+/// MP4 type otherwise: a file under a temporary name is still the recording it will be renamed to.
+pub(crate) fn format_of(asset: &Path) -> String {
+    const RECORDING_EXTENSIONS: [&str; 6] = ["mp4", "m4v", "mov", "3gp", "3g2", "m4a"];
+    let extension = asset
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_ascii_lowercase());
+    match extension {
+        Some(extension) if RECORDING_EXTENSIONS.contains(&extension.as_str()) => {
+            c2pa::format_from_path(asset).unwrap_or_else(|| "video/mp4".to_owned())
+        },
+        _ => "video/mp4".to_owned(),
+    }
 }
 
 fn file_name(path: &Path) -> String {
@@ -170,7 +180,11 @@ pub fn sign(request: &Request<'_>, signer: &dyn Signer, out: Option<&Path>) -> R
         },
         Path::to_path_buf,
     );
-    let partial = written.with_extension("part");
+    let partial = {
+        let mut name = file_name(&written);
+        name.push_str(".signing");
+        written.with_file_name(name)
+    };
     let read: Vec<&Path> = std::iter::once(request.asset)
         .chain(request.sources.iter().copied())
         .collect();

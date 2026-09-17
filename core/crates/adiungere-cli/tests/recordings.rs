@@ -544,3 +544,185 @@ fn export_says_how_many_track_references_it_left_out() {
     let json: serde_json::Value = serde_json::from_str(&out(&as_json)).unwrap();
     assert_eq!(json["report"]["references_dropped"], 0);
 }
+
+#[test]
+fn export_signs_last_and_verify_reads_the_credentials_back() {
+    // Arrange
+    let directory = Temporary::new("export-sign");
+    let clip = write_reference_like(directory.path(), "20260604_122323E.MP4").unwrap();
+    let out_path = directory.path().join("rear.mp4");
+
+    // Act
+    let exported = run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        out_path.to_str().unwrap(),
+        "--sign",
+    ])
+    .unwrap();
+    let verified = run(&[
+        "verify",
+        directory.path().join("rear.mp4.manifest.json").to_str().unwrap(),
+        out_path.to_str().unwrap(),
+        "--format",
+        "json",
+    ])
+    .unwrap();
+    let described = run(&[
+        "verify",
+        directory.path().join("rear.mp4.manifest.json").to_str().unwrap(),
+        out_path.to_str().unwrap(),
+    ])
+    .unwrap();
+
+    // Assert
+    assert_eq!(exported.status.code(), Some(0), "{}", err(&exported));
+    let printed = out(&exported);
+    assert!(
+        printed.contains("Content Credentials embedded in the file"),
+        "{printed}"
+    );
+    assert!(printed.contains("on no trust list"), "{printed}");
+    assert!(
+        printed.contains("The signature carries no time stamp"),
+        "{printed}"
+    );
+    assert!(
+        printed.contains("Actions recorded: c2pa.opened, c2pa.repackaged"),
+        "{printed}"
+    );
+    assert!(
+        printed.contains("every track fingerprint in them is the file's"),
+        "{printed}"
+    );
+    assert_eq!(verified.status.code(), Some(0), "{}", out(&verified));
+    let json: serde_json::Value = serde_json::from_str(&out(&verified)).unwrap();
+    assert_eq!(
+        json["credentials"]["credentials"]["state"],
+        "valid_not_on_trust_list"
+    );
+    assert_eq!(json["credentials"]["credentials"]["placement"], "embedded");
+    assert_eq!(json["credentials"]["tracks_differing"], 0);
+    assert_eq!(json["token"], serde_json::Value::Null);
+    assert!(
+        json["comparison"]["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|finding| finding["outcome"] == "identical"),
+        "{}",
+        json["comparison"]
+    );
+    assert_eq!(described.status.code(), Some(0), "{}", out(&described));
+    assert!(
+        out(&described).contains("The signer's certificate chains to no trust list"),
+        "{}",
+        out(&described)
+    );
+}
+
+#[test]
+fn sign_writes_credentials_beside_a_recording_and_leaves_it_as_it_was() {
+    // Arrange
+    let directory = Temporary::new("sign-beside");
+    let clip = write_reference_like(directory.path(), "20260604_122323E.MP4").unwrap();
+    let bytes_before = std::fs::read(&clip).unwrap();
+    let manifest = directory.path().join("clip.manifest.json");
+    run(&[
+        "fingerprint",
+        clip.to_str().unwrap(),
+        "--manifest",
+        manifest.to_str().unwrap(),
+    ])
+    .unwrap();
+
+    // Act
+    let signed = run(&["sign", clip.to_str().unwrap()]).unwrap();
+    let verified = run(&["verify", manifest.to_str().unwrap(), clip.to_str().unwrap()]).unwrap();
+
+    // Assert
+    assert_eq!(signed.status.code(), Some(0), "{}", err(&signed));
+    let sidecar = directory.path().join("20260604_122323E.c2pa");
+    assert!(sidecar.is_file());
+    assert!(
+        out(&signed).contains("Content Credentials written beside the file"),
+        "{}",
+        out(&signed)
+    );
+    assert_eq!(std::fs::read(&clip).unwrap(), bytes_before);
+    assert_eq!(verified.status.code(), Some(0), "{}", out(&verified));
+    assert!(
+        out(&verified).contains("Content Credentials beside the file"),
+        "{}",
+        out(&verified)
+    );
+    assert!(
+        out(&verified).contains("Actions recorded: c2pa.opened"),
+        "{}",
+        out(&verified)
+    );
+}
+
+#[test]
+fn verify_says_when_a_file_carries_no_credentials_and_reports_a_broken_binding() {
+    // Arrange
+    let directory = Temporary::new("verify-credentials");
+    let clip = write_reference_like(directory.path(), "20260604_122323E.MP4").unwrap();
+    let signed_path = directory.path().join("rear.mp4");
+    run(&[
+        "export",
+        clip.to_str().unwrap(),
+        "--camera",
+        "rear",
+        "--out",
+        signed_path.to_str().unwrap(),
+        "--sign",
+    ])
+    .unwrap();
+    let signed_manifest = directory.path().join("rear.mp4.manifest.json");
+    // A rewrite of the signed file that keeps every sample and moves the boxes.
+    let rewritten = directory.path().join("rewritten.mp4");
+    run(&[
+        "export",
+        signed_path.to_str().unwrap(),
+        "--camera",
+        "both",
+        "--out",
+        rewritten.to_str().unwrap(),
+    ])
+    .unwrap();
+    let clip_manifest = directory.path().join("clip.manifest.json");
+    run(&[
+        "fingerprint",
+        clip.to_str().unwrap(),
+        "--manifest",
+        clip_manifest.to_str().unwrap(),
+    ])
+    .unwrap();
+
+    // Act
+    let none = run(&["verify", clip_manifest.to_str().unwrap(), clip.to_str().unwrap()]).unwrap();
+    let broken = run(&[
+        "verify",
+        signed_manifest.to_str().unwrap(),
+        rewritten.to_str().unwrap(),
+    ])
+    .unwrap();
+
+    // Assert
+    assert_eq!(none.status.code(), Some(0), "{}", out(&none));
+    assert!(
+        out(&none).contains("No Content Credentials are embedded in the file or beside it"),
+        "{}",
+        out(&none)
+    );
+    assert_eq!(broken.status.code(), Some(1), "{}", out(&broken));
+    assert!(
+        out(&broken).contains("does not hold: ") && out(&broken).contains("assertion.bmffHash.mismatch"),
+        "{}",
+        out(&broken)
+    );
+}

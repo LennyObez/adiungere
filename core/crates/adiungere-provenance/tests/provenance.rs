@@ -162,7 +162,7 @@ fn an_export_is_signed_with_the_manifest_embedded_and_reads_back_with_its_facts(
         credentials.statuses
     );
     assert!(std::fs::read(&asset).unwrap().len() < std::fs::read(&out).unwrap().len());
-    assert!(!directory.0.join("rear.signed.part").exists());
+    assert!(!directory.0.join("rear.signed.mp4.signing").exists());
 }
 
 #[test]
