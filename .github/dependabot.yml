@@ -7,12 +7,20 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # A release is adopted a week after it appears, not the day it does. A version pulled the day after
+    # publication is the one most likely to be yanked, and a week costs nothing a pinned graph needs.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: chore
       include: scope
     labels:
       - dependencies
       - rust
+    groups:
+      cargo:
+        patterns:
+          - '*'
 
   - package-ecosystem: github-actions
     directory: /
@@ -20,8 +28,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
-      prefix: ci
+      prefix: chore
       include: scope
     labels:
       - dependencies

@@ -4,20 +4,21 @@
 //! in a README is a claim, and it is the claim most likely to quietly stop being true: a guarantee is added,
 //! a probe is recorded, and a word like "forty" stays where it was.
 //!
-//! Four such claims are held here. The ledger accounts for every guarantee identifier exactly once. The
-//! enforced table lists exactly the guarantees the suite holds, no more and no fewer. The README's count of
-//! committed guarantees matches the ledger. And the gate sequence the documentation describes is the sequence
-//! the script runs.
+//! Six such claims are held here. The ledger accounts for every guarantee identifier exactly once. The
+//! enforced tables list exactly the guarantees the suite holds, and each of those is a real test. The
+//! README's count of committed guarantees and of probes match the ledger and the register. The number of
+//! decision records the changelog states matches the records on disk. And the gate sequence the
+//! documentation describes is exactly the sequence the script runs, in both directions.
 //!
 //! The plan scheduled this for the last milestone, to reconcile the tables once everything was written. It
-//! arrived at the first one instead, because it caught a wrong number in the README on the day it was written.
+//! arrived at the first one instead, because a count in a document is wrong the moment nobody checks it.
 
 use adiungere_cli::evidence::Register;
-use adiungere_guarantees::{read_at, tracked_paths};
-use std::collections::BTreeSet;
+use adiungere_guarantees::{TextFile, read_at, tracked_paths, tracked_text_files};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The highest guarantee identifier the ledger accounts for.
-const HIGHEST: u32 = 52;
+const HIGHEST: u32 = 54;
 
 /// Identifiers of the guarantees the suite actually holds, read from the test file names.
 fn guarantees_in_the_suite(paths: &[String]) -> BTreeSet<u32> {
@@ -32,21 +33,28 @@ fn guarantees_in_the_suite(paths: &[String]) -> BTreeSet<u32> {
         .collect()
 }
 
-/// Identifiers a table lists, read from rows beginning with a guarantee cell.
-fn guarantees_listed_in(table: &str) -> BTreeSet<u32> {
-    table
-        .lines()
-        .filter_map(|line| {
-            let cell = line.strip_prefix("| G")?;
-            let digits: String = cell.chars().take_while(char::is_ascii_digit).collect();
+/// How many times each identifier is listed, read from rows beginning with a guarantee cell.
+fn guarantee_rows_in(table: &str) -> BTreeMap<u32, usize> {
+    let mut counts = BTreeMap::new();
 
-            digits.parse().ok()
-        })
-        .collect()
+    for line in table.lines() {
+        let Some(cell) = line.strip_prefix("| G") else {
+            continue;
+        };
+        let digits: String = cell.chars().take_while(char::is_ascii_digit).collect();
+
+        if let Ok(id) = digits.parse::<u32>() {
+            *counts.entry(id).or_insert(0) += 1;
+        }
+    }
+
+    counts
 }
 
 /// The part of a document between one heading and the next of the same level.
 fn section_of(document: &str, heading: &str) -> String {
+    let level = heading.chars().take_while(|c| *c == '#').count();
+    let marker = format!("{} ", "#".repeat(level));
     let mut collecting = false;
     let mut collected = Vec::new();
 
@@ -56,7 +64,7 @@ fn section_of(document: &str, heading: &str) -> String {
             continue;
         }
 
-        if collecting && line.starts_with("## ") {
+        if collecting && line.starts_with(&marker) {
             break;
         }
 
@@ -117,16 +125,50 @@ fn number_word(value: usize) -> String {
     }
 }
 
+/// The names of the steps the gate script runs, in order.
+fn gate_steps(script: &str) -> Vec<String> {
+    script
+        .lines()
+        .filter_map(|line| {
+            let rest = line.trim().strip_prefix("run '")?;
+            let (name, _) = rest.split_once('\'')?;
+
+            Some(name.to_owned())
+        })
+        .collect()
+}
+
+/// The steps the testing document says run today: rows whose command column is a command, not a milestone.
+fn documented_steps(testing: &str) -> Vec<String> {
+    section_of(testing, "## The gate sequence")
+        .lines()
+        .filter(|line| line.starts_with("| ") && !line.starts_with("| #") && !line.starts_with("|---"))
+        .filter_map(|line| {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            let name = cells.get(2)?;
+            let command = cells.get(3)?;
+
+            (command.contains('`')).then(|| name.to_lowercase())
+        })
+        .collect()
+}
+
 #[test]
 fn the_ledger_accounts_for_every_identifier_exactly_once() {
     // Arrange
     let ledger = read_at("docs/guarantees.md").unwrap();
 
     // Act
-    let listed = guarantees_listed_in(&ledger);
+    let rows = guarantee_rows_in(&ledger);
     let expected: BTreeSet<u32> = (1..=HIGHEST).collect();
+    let listed: BTreeSet<u32> = rows.keys().copied().collect();
     let missing: Vec<u32> = expected.difference(&listed).copied().collect();
     let unexpected: Vec<u32> = listed.difference(&expected).copied().collect();
+    let repeated: Vec<u32> = rows
+        .iter()
+        .filter(|(_, count)| **count > 1)
+        .map(|(id, _)| *id)
+        .collect();
 
     // Assert
     assert!(
@@ -137,10 +179,14 @@ fn the_ledger_accounts_for_every_identifier_exactly_once() {
         unexpected.is_empty(),
         "The ledger lists identifiers beyond the range: {unexpected:?}"
     );
+    assert!(
+        repeated.is_empty(),
+        "The ledger lists these identifiers more than once: {repeated:?}"
+    );
 }
 
 #[test]
-fn the_enforced_table_lists_exactly_the_guarantees_the_suite_holds() {
+fn the_enforced_tables_list_exactly_the_guarantees_the_suite_holds() {
     // Arrange
     let ledger = read_at("docs/guarantees.md").unwrap();
     let readme = read_at("README.md").unwrap();
@@ -148,8 +194,12 @@ fn the_enforced_table_lists_exactly_the_guarantees_the_suite_holds() {
 
     // Act
     let held = guarantees_in_the_suite(&paths);
-    let in_ledger = guarantees_listed_in(&section_of(&ledger, "## Enforced today"));
-    let in_readme = guarantees_listed_in(&section_of(&readme, "### Enforced today"));
+    let in_ledger: BTreeSet<u32> = guarantee_rows_in(&section_of(&ledger, "## Enforced today"))
+        .into_keys()
+        .collect();
+    let in_readme: BTreeSet<u32> = guarantee_rows_in(&section_of(&readme, "### Enforced today"))
+        .into_keys()
+        .collect();
 
     // Assert
     assert!(
@@ -158,11 +208,41 @@ fn the_enforced_table_lists_exactly_the_guarantees_the_suite_holds() {
     );
     assert_eq!(
         in_ledger, held,
-        "The ledger's enforced table and the suite disagree. Ledger: {in_ledger:?}, suite: {held:?}"
+        "The ledger's enforced table and the suite disagree."
     );
     assert_eq!(
         in_readme, held,
-        "The README's enforced table and the suite disagree. README: {in_readme:?}, suite: {held:?}"
+        "The README's enforced table and the suite disagree."
+    );
+}
+
+#[test]
+fn every_guarantee_file_in_the_suite_holds_a_test() {
+    // A file named like a guarantee and holding no test would count as enforced while enforcing nothing.
+
+    // Arrange
+    let files: Vec<TextFile> = tracked_text_files()
+        .unwrap()
+        .into_iter()
+        .filter(|file| file.path.starts_with("core/crates/adiungere-guarantees/tests/g"))
+        .collect();
+
+    // Act
+    let empty: Vec<String> = files
+        .iter()
+        .filter(|file| !file.has_extension("rs") || !file.contents.contains("#[test]"))
+        .map(|file| file.path.clone())
+        .collect();
+
+    // Assert
+    assert!(
+        !files.is_empty(),
+        "No guarantee file was read; this check is inert."
+    );
+    assert!(
+        empty.is_empty(),
+        "These guarantee files hold no test:\n  {}",
+        empty.join("\n  ")
     );
 }
 
@@ -181,48 +261,6 @@ fn the_readme_counts_the_committed_guarantees_correctly() {
         readme.to_lowercase().contains(&expected),
         "The README should say \"{expected}\", because {committed} of the {HIGHEST} guarantees are not \
          enforced yet."
-    );
-}
-
-#[test]
-fn the_documented_gate_sequence_is_the_sequence_the_script_runs() {
-    // A gate the documentation describes and the script does not run is a step nobody performs while everyone
-    // believes it happens.
-
-    // Arrange
-    let script = read_at("scripts/gate.sh").unwrap();
-    let testing = read_at("docs/testing.md").unwrap();
-
-    // Act
-    let steps: Vec<String> = script
-        .lines()
-        .filter_map(|line| {
-            let rest = line.trim().strip_prefix("run '")?;
-            let (name, _) = rest.split_once('\'')?;
-
-            Some(name.to_owned())
-        })
-        .collect();
-
-    let undocumented: Vec<&String> = steps
-        .iter()
-        .filter(|step| !testing.to_lowercase().contains(&step.to_lowercase()))
-        .collect();
-
-    // Assert
-    assert!(
-        steps.len() >= 8,
-        "Only {} steps were read from the script; this check is inert.",
-        steps.len()
-    );
-    assert!(
-        undocumented.is_empty(),
-        "These gate steps run and the testing document does not describe them:\n  {}",
-        undocumented
-            .iter()
-            .map(|step| step.as_str())
-            .collect::<Vec<_>>()
-            .join("\n  ")
     );
 }
 
@@ -248,28 +286,95 @@ fn the_readme_counts_the_probes_correctly() {
 }
 
 #[test]
+fn the_changelog_counts_the_decision_records_correctly() {
+    // Arrange
+    let changelog = read_at("CHANGELOG.md").unwrap();
+    let records = tracked_paths()
+        .unwrap()
+        .iter()
+        .filter(|path| {
+            path.starts_with("docs/adr/")
+                && adiungere_guarantees::is_markdown_path(path)
+                && !path.ends_with("README.md")
+                && !path.ends_with("0000-template.md")
+        })
+        .count();
+
+    // Act
+    let expected = format!("{} decision records", number_word(records));
+
+    // Assert
+    assert!(
+        changelog.to_lowercase().contains(&expected),
+        "The changelog should say \"{expected}\", because that many records exist."
+    );
+}
+
+#[test]
+fn the_documented_gate_sequence_is_the_sequence_the_script_runs() {
+    // A gate the documentation describes and the script does not run is a step nobody performs while everyone
+    // believes it happens, and a step the script runs that the documentation omits is one nobody can
+    // reproduce from the text. Both directions, in order.
+
+    // Arrange
+    let script = read_at("scripts/gate.sh").unwrap();
+    let testing = read_at("docs/testing.md").unwrap();
+
+    // Act
+    let run: Vec<String> = gate_steps(&script)
+        .iter()
+        .map(|step| step.to_lowercase())
+        .collect();
+    let documented = documented_steps(&testing);
+
+    // Assert
+    assert!(
+        run.len() >= 8,
+        "Only {} steps were read from the script; this check is inert.",
+        run.len()
+    );
+    assert_eq!(
+        run, documented,
+        "The steps the script runs and the steps the testing document lists as running today must be the \
+         same, in the same order."
+    );
+}
+
+#[test]
 fn the_number_words_are_the_ones_this_project_writes() {
     // The comparison above is only as good as the spelling, so the spelling is exercised.
 
     // Act and assert
     assert_eq!(number_word(7), "seven");
     assert_eq!(number_word(11), "eleven");
-    assert_eq!(number_word(12), "twelve");
+    assert_eq!(number_word(14), "fourteen");
     assert_eq!(number_word(39), "thirty-nine");
     assert_eq!(number_word(40), "forty");
     assert_eq!(number_word(41), "forty-one");
 }
 
 #[test]
-fn the_section_reader_stops_at_the_next_heading() {
+fn the_section_reader_stops_at_the_next_heading_of_the_same_level() {
     // Without this, the enforced table would be compared against the whole document and would always agree.
 
     // Arrange
-    let document = "## Enforced today\n\n| G01 | a |\n\n## Committed\n\n| G12 | b |\n";
+    let document = "## Enforced today\n\n| G01 | a |\n\n### A sub-heading\n\n| G02 | b |\n\n## Committed\n\n| G12 | c |\n";
 
     // Act
-    let enforced = guarantees_listed_in(&section_of(document, "## Enforced today"));
+    let enforced: BTreeSet<u32> = guarantee_rows_in(&section_of(document, "## Enforced today"))
+        .into_keys()
+        .collect();
 
     // Assert
-    assert_eq!(enforced, [1].into_iter().collect::<BTreeSet<u32>>());
+    assert_eq!(enforced, [1, 2].into_iter().collect::<BTreeSet<u32>>());
+}
+
+#[test]
+fn a_repeated_row_is_counted_twice() {
+    // Act
+    let rows = guarantee_rows_in("| G12 | a |\n| G12 | b |\n| G13 | c |\n");
+
+    // Assert
+    assert_eq!(rows.get(&12), Some(&2));
+    assert_eq!(rows.get(&13), Some(&1));
 }

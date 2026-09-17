@@ -1,0 +1,22 @@
+[package]
+name = "adiungere-isobmff"
+description = "Reads the box structure of an ISO base media file as byte ranges, with typed views only where a value is needed."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+adiungere-fixtures = { path = "../adiungere-fixtures" }
+
+[lints]
+workspace = true

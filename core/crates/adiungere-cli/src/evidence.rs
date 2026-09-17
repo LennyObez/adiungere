@@ -5,12 +5,16 @@
 //!
 //! The parser is deliberately strict. A lenient parser would skip an entry whose shape had drifted and
 //! report fewer probes than the file contains, which is exactly the silent under-reporting the register
-//! exists to prevent. Three rules are worth naming because they are what make a verdict mean something:
+//! exists to prevent. Four rules are worth naming because they are what make a verdict mean something:
 //!
 //! - Entries are in ascending order, so the file cannot grow two entries for one identifier.
 //! - The bullets are in a fixed order, so an entry is either complete or refused.
 //! - A verdict of `measured` or `reasoned` **must** carry a result, and `unavailable` or `not started`
 //!   **must not**. A measurement with no recorded finding is not a measurement.
+//! - Anything that looks like an entry and is not one is an error, never something to skip. A heading that
+//!   starts with a probe identifier but is not spelt canonically, a field bullet outside any entry, and a
+//!   fenced block that never closes are all refused, because each of them is how an entry disappears from
+//!   the count without anyone noticing.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -18,6 +22,7 @@ use std::str::FromStr;
 
 use serde::{Serialize, Serializer};
 
+use crate::markdown::{FenceTracker, LineKind, heading};
 use crate::roadmap::{MilestoneId, Roadmap};
 
 /// The identifier of a probe, written `P01` in the register.
@@ -29,6 +34,18 @@ impl ProbeId {
     #[must_use]
     pub const fn number(self) -> u16 {
         self.0
+    }
+
+    /// Parses an identifier only in the spelling the register uses: `P` and at least two digits, no leading
+    /// zero beyond the second digit, never zero.
+    ///
+    /// The lenient [`FromStr`] accepts `P1` for a person typing at a prompt. The documents do not get that
+    /// latitude, because two spellings of one identifier is how a file grows two entries for one probe.
+    #[must_use]
+    pub fn canonical(text: &str) -> Option<Self> {
+        let id = text.parse::<Self>().ok()?;
+
+        (id.0 != 0 && id.to_string() == text).then_some(id)
     }
 }
 
@@ -164,27 +181,37 @@ impl Register {
     pub fn parse(source: &str) -> Result<Self, ParseError> {
         let mut probes: Vec<Probe> = Vec::new();
         let mut pending: Option<Pending> = None;
-        let mut inside_fence = false;
+        let mut fences = FenceTracker::new();
 
         for (index, raw) in source.lines().enumerate() {
             let line = index + 1;
             let text = raw.trim_end();
 
-            if text.trim_start().starts_with("```") {
-                inside_fence = !inside_fence;
+            let kind = fences.observe(text, line);
+
+            if kind != LineKind::Outside {
+                // Inside a fence nothing is a heading or a bullet. A fence inside an open result is part of
+                // the finding, typically the command that produced it, and is kept verbatim.
+                if let Some(entry) = pending.as_mut()
+                    && entry.result_open
+                {
+                    entry.result.push(text.to_owned());
+                }
+
                 continue;
             }
 
-            if inside_fence {
-                continue;
-            }
-
-            if let Some(rest) = text.strip_prefix("## ") {
+            if let Some((level, rest)) = heading(text) {
                 if let Some(entry) = pending.take() {
                     probes.push(entry.finish()?);
                 }
 
-                if let Some((id, title)) = split_heading(rest) {
+                if level == 2 && looks_like_a_probe_heading(rest) {
+                    let (id, title) = split_heading(rest).ok_or_else(|| ParseError::MalformedHeading {
+                        line,
+                        text: text.to_owned(),
+                    })?;
+
                     if let Some(previous) = probes.last()
                         && id <= previous.id
                     {
@@ -201,19 +228,21 @@ impl Register {
                 continue;
             }
 
-            if text.starts_with('#') {
-                if let Some(entry) = pending.take() {
-                    probes.push(entry.finish()?);
-                }
-
-                continue;
+            match (split_bullet(text), pending.as_mut()) {
+                (Some((label, value)), Some(entry)) => entry.set(label, value, line)?,
+                (Some((label, _)), None) => {
+                    return Err(ParseError::StrayBullet {
+                        line,
+                        label: label.to_owned(),
+                    });
+                },
+                (None, Some(entry)) => entry.absorb(text, line)?,
+                (None, None) => {},
             }
+        }
 
-            let Some(entry) = pending.as_mut() else {
-                continue;
-            };
-
-            entry.absorb(text, line)?;
+        if let Some(opened) = fences.unterminated() {
+            return Err(ParseError::UnterminatedFence { line: opened });
         }
 
         if let Some(entry) = pending.take() {
@@ -256,7 +285,7 @@ impl Register {
     /// Compares the register with the roadmap and reports every way the two disagree.
     ///
     /// An empty result means each probe names a milestone the roadmap has, each milestone names the probes
-    /// assigned to it, and the roadmap mentions no probe the register has never heard of.
+    /// assigned to it, and the roadmap mentions no probe the register does not hold.
     #[must_use]
     pub fn reconcile(&self, roadmap: &Roadmap) -> Vec<Discrepancy> {
         let mut found = Vec::new();
@@ -346,6 +375,13 @@ impl fmt::Display for Discrepancy {
 pub enum ParseError {
     /// The file holds no entry at all, so reading it proved nothing.
     Empty,
+    /// A level-two heading starts with a probe identifier and is not spelt canonically.
+    MalformedHeading {
+        /// The line of the heading.
+        line: usize,
+        /// The heading as written.
+        text: String,
+    },
     /// An entry appears before one with a lower or equal identifier.
     OutOfOrder {
         /// The line of the offending heading.
@@ -354,6 +390,18 @@ pub enum ParseError {
         id: ProbeId,
         /// The identifier before it.
         previous: ProbeId,
+    },
+    /// A field bullet appears where no entry is open.
+    StrayBullet {
+        /// The line it is on.
+        line: usize,
+        /// The label that was read.
+        label: String,
+    },
+    /// A fenced block is opened and the file ends before it closes.
+    UnterminatedFence {
+        /// The line that opened it.
+        line: usize,
     },
     /// A bullet names something that is not a field of an entry.
     UnknownField {
@@ -440,9 +488,23 @@ impl fmt::Display for ParseError {
         match self {
             Self::Empty => formatter
                 .write_str("the register holds no entry, so reading it proved nothing about any probe"),
+            Self::MalformedHeading { line, text } => write!(
+                formatter,
+                "line {line}: \"{text}\" starts like a probe heading and is not one; write \"## P01 A title\", \
+                 with two or more digits and never zero"
+            ),
             Self::OutOfOrder { line, id, previous } => write!(
                 formatter,
                 "line {line}: {id} comes after {previous}; entries are in ascending order"
+            ),
+            Self::StrayBullet { line, label } => write!(
+                formatter,
+                "line {line}: a \"{label}\" field appears outside any entry"
+            ),
+            Self::UnterminatedFence { line } => write!(
+                formatter,
+                "line {line}: a fenced block opens here and never closes, so everything after it would be \
+                 skipped"
             ),
             Self::UnknownField { line, label } => {
                 write!(formatter, "line {line}: an entry has no field called \"{label}\"")
@@ -505,6 +567,7 @@ struct Pending {
     fields: Vec<(usize, String, usize)>,
     result: Vec<String>,
     result_open: bool,
+    after_blank: bool,
 }
 
 impl Pending {
@@ -516,14 +579,12 @@ impl Pending {
             fields: Vec::new(),
             result: Vec::new(),
             result_open: false,
+            after_blank: false,
         }
     }
 
+    /// Takes a line that is neither a heading nor a field bullet.
     fn absorb(&mut self, text: &str, line: usize) -> Result<(), ParseError> {
-        if let Some((label, value)) = split_bullet(text) {
-            return self.set(label, value, line);
-        }
-
         if self.result_open {
             self.result
                 .push(text.strip_prefix("  ").unwrap_or(text).to_owned());
@@ -531,10 +592,14 @@ impl Pending {
         }
 
         if text.trim().is_empty() {
+            self.after_blank = true;
             return Ok(());
         }
 
-        if let Some(continuation) = text.strip_prefix("  ")
+        // A continuation belongs to the bullet directly above it. After a blank line there is nothing to
+        // continue, and an indented paragraph would otherwise be glued onto the previous field unread.
+        if !self.after_blank
+            && let Some(continuation) = text.strip_prefix("  ")
             && let Some(last) = self.fields.last_mut()
         {
             last.1.push(' ');
@@ -593,6 +658,7 @@ impl Pending {
         }
 
         self.fields.push((index, value.trim().to_owned(), line));
+        self.after_blank = false;
 
         Ok(())
     }
@@ -634,12 +700,7 @@ impl Pending {
         let method = self.required(3)?.0.to_owned();
         let decides = self.required(4)?.0.to_owned();
 
-        let result = if self.result_open {
-            let joined = self.result.join("\n").trim().to_owned();
-            Some(joined)
-        } else {
-            None
-        };
+        let result = self.result_open.then(|| self.result.join("\n").trim().to_owned());
 
         match (verdict.is_a_finding(), result.is_some()) {
             (false, true) => return Err(ParseError::ResultWithoutFinding { id: self.id, verdict }),
@@ -661,22 +722,20 @@ impl Pending {
     }
 }
 
+/// Whether a level-two heading is trying to be a probe entry: `P` followed by a digit.
+fn looks_like_a_probe_heading(rest: &str) -> bool {
+    let mut characters = rest.chars();
+
+    characters.next() == Some('P') && characters.next().is_some_and(|second| second.is_ascii_digit())
+}
+
 /// Splits `P01 A title` into its identifier and its title, canonical spelling required.
 fn split_heading(rest: &str) -> Option<(ProbeId, String)> {
     let (candidate, title) = rest.split_once(' ')?;
-    let id = candidate.parse::<ProbeId>().ok()?;
-
-    if id.to_string() != candidate {
-        return None;
-    }
-
+    let id = ProbeId::canonical(candidate)?;
     let title = title.trim();
 
-    if title.is_empty() {
-        None
-    } else {
-        Some((id, title.to_owned()))
-    }
+    (!title.is_empty()).then(|| (id, title.to_owned()))
 }
 
 /// Splits `- **Verdict:** measured` into its label and its value.
@@ -688,44 +747,49 @@ fn split_bullet(text: &str) -> Option<(&str, &str)> {
 
 /// Every probe identifier mentioned in a piece of prose, as whole tokens.
 ///
-/// A token counts only when it is not glued to a letter or a digit on either side, so an identifier inside a
-/// longer word is not a mention.
+/// A token counts only when it is not glued to a letter or a digit on either side, in any script, so an
+/// identifier inside a longer word is not a mention.
 #[must_use]
 pub fn probe_mentions(text: &str) -> BTreeSet<ProbeId> {
     let mut found = BTreeSet::new();
-    let bytes = text.as_bytes();
+    let characters: Vec<(usize, char)> = text.char_indices().collect();
 
-    for (start, _) in text.char_indices().filter(|(_, character)| *character == 'P') {
-        let preceded_by_word = start
+    for (position, &(start, character)) in characters.iter().enumerate() {
+        if character != 'P' {
+            continue;
+        }
+
+        let preceded_by_word = position
             .checked_sub(1)
-            .and_then(|before| bytes.get(before))
-            .is_some_and(u8::is_ascii_alphanumeric);
+            .and_then(|before| characters.get(before))
+            .is_some_and(|(_, previous)| previous.is_alphanumeric());
 
         if preceded_by_word {
             continue;
         }
 
-        let digits = bytes
+        let digits = characters
             .iter()
-            .skip(start + 1)
-            .take_while(|byte| byte.is_ascii_digit())
+            .skip(position + 1)
+            .take_while(|(_, found)| found.is_ascii_digit())
             .count();
 
         if digits < 2 {
             continue;
         }
 
-        let followed_by_word = bytes
-            .get(start + 1 + digits)
-            .is_some_and(u8::is_ascii_alphanumeric);
+        let followed_by_word = characters
+            .get(position + 1 + digits)
+            .is_some_and(|(_, next)| next.is_alphanumeric());
 
         if followed_by_word {
             continue;
         }
 
-        if let Some(token) = text.get(start..start + 1 + digits)
-            && let Ok(id) = token.parse::<ProbeId>()
-            && id.to_string() == token
+        let end = start + 1 + digits;
+
+        if let Some(token) = text.get(start..end)
+            && let Some(id) = ProbeId::canonical(token)
         {
             found.insert(id);
         }

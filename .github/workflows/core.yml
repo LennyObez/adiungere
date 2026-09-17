@@ -1,15 +1,25 @@
 name: Core
 
-# The path filter applies to pushes only. On a pull request this workflow always runs, because it provides a
-# required status check: a filtered check that never fires is not skipped, it is permanently pending, and the
-# pull request can never merge.
+# The path filter applies to pushes only. On a pull request this workflow always runs, because it provides
+# required status checks: a filtered check that never fires is not skipped, it is permanently pending, and
+# the pull request can never merge.
+#
+# Five jobs. "Core" is the gate sequence on Linux, guarantees included: it is the one that runs the reference
+# script and the pinned media tool as oracles, so it is the one that needs the interpreter and the tool. The
+# other four are the platform matrix: the same input must produce the same bytes on every platform the
+# product ships to, so the crates are built and tested on macOS and Windows, built for musl, and built for
+# WebAssembly, the last one with only the crates the browser will link.
 
 on:
   push:
     branches: [main]
     paths:
       - 'core/**'
+      - 'scripts/**'
+      - 'tools/**'
       - 'rust-toolchain.toml'
+      - 'rustfmt.toml'
+      - 'clippy.toml'
       - '.github/workflows/core.yml'
   pull_request:
 
@@ -32,16 +42,45 @@ jobs:
   gates:
     name: Core
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
+      # No version is named here. The toolchain file at the repository root is the only place one exists, and
+      # a guarantee refuses any workflow that restates or overrides it.
       - name: Resolve the pinned toolchain
         run: |
           rustup show active-toolchain
           cargo --version
           rustc --version
+
+      # The interpreter that runs the reference fingerprint script, at the release line pinned in
+      # tools/versions.toml. The line is read from the file, never written here.
+      - name: Read the pinned interpreter line
+        id: interpreter
+        working-directory: .
+        run: |
+          line=$(awk '$0 == "[python]" { inside = 1; next } /^\[/ { inside = 0 } inside && $1 == "version" { gsub(/"/, "", $3); print $3; exit }' tools/versions.toml)
+          test -n "$line"
+          printf 'line=%s\n' "$line" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ steps.interpreter.outputs.line }}
+
+      # The pinned media tool, fetched once per pin and verified against its digest. The cache key is the
+      # pin itself, so a new pin is a new download and an old one never survives.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: tools-${{ hashFiles('tools/versions.toml') }}
+
+      - name: Fetch the pinned external tools
+        working-directory: .
+        run: scripts/fetch-tools.sh
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -64,21 +103,100 @@ jobs:
       - name: Documentation tests
         run: cargo test --workspace --doc
 
+      # A broken intra-doc link or a malformed example is a defect in the one place a reader looks first, and
+      # the lint that requires documentation does not see it.
+      - name: Documentation builds without a warning
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --document-private-items
+
       # The lock file is committed so that a build of a given commit resolves the same graph every time. This
       # proves the committed one is the one the manifests describe.
       - name: The lock file matches the manifests
         run: cargo metadata --locked --format-version 1 > /dev/null
 
-  supply_chain:
-    name: Supply chain
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  matrix:
+    name: Core on ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS arm64
+            runner: macos-15
+          - label: macOS x86_64
+            runner: macos-15-intel
+          - label: Windows
+            runner: windows-2025
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Advisories, licences, sources and bans
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
-          manifest-path: core/Cargo.toml
-          command: check
+          persist-credentials: false
+
+      - name: Resolve the pinned toolchain
+        run: |
+          rustup show active-toolchain
+          cargo --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      # The guarantee suite runs on Linux, where the oracles are fetched; every other crate runs here, so a
+      # platform-specific difference in reading, hashing or writing goes red on the platform it belongs to.
+      - name: Build
+        run: cargo build --workspace --all-targets --exclude adiungere-guarantees
+
+      - name: Tests
+        run: cargo test --workspace --exclude adiungere-guarantees
+
+  musl:
+    name: Core for musl
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the pinned toolchain and add the target
+        run: |
+          rustup show active-toolchain
+          rustup target add x86_64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      # Build only: a statically linked command line for hosts with no matching C library.
+      - name: Build
+        run: cargo build --workspace --target x86_64-unknown-linux-musl --exclude adiungere-guarantees
+
+  wasm:
+    name: Core for WebAssembly
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the pinned toolchain and add the target
+        run: |
+          rustup show active-toolchain
+          rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      # The crates the browser will link, and nothing that opens files or spawns processes. A dependency
+      # that cannot build for this target is caught here, three milestones before the website needs it.
+      - name: Build
+        run: >-
+          cargo build --target wasm32-unknown-unknown
+          -p adiungere-isobmff -p adiungere-fingerprint -p adiungere-manifest -p adiungere-scan

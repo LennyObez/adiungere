@@ -75,9 +75,10 @@ directory.
 
 ## Enforcement
 
-From M5 and M7, each installed surface is watched over a scripted session and must make no network request
-during scan, playback, export or verification, apart from the signing and time-stamping calls that a person
-explicitly triggers. That is the installed counterpart of guarantee **G34**.
+Guarantee **G53**, from M5 and extended to each later surface: an installed application is watched over a
+scripted session and must make no network request during scan, playback, export or verification, apart from
+the signing and time-stamping calls that a person explicitly triggers. That is the installed counterpart of
+guarantee **G34**.
 
 ## What would change this decision
 

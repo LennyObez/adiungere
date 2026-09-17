@@ -1,0 +1,9 @@
+{
+  "name": "adiungere-oracles",
+  "private": true,
+  "description": "The browser-side reader used as an oracle for probe P01, pinned exactly.",
+  "type": "module",
+  "dependencies": {
+    "mediabunny": "1.56.3"
+  }
+}

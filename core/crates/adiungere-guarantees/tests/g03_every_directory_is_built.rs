@@ -1,4 +1,4 @@
-//! **G03.** Every directory holding source is covered by a workflow path filter.
+//! **G03.** Every directory holding source is built by a pipeline that a change to it triggers.
 //!
 //! One repository holding six surfaces is only safe if no directory can be added that no pipeline builds. A
 //! path filter that is too narrow does not fail; it silently skips a build, and the pull request is green.
@@ -6,30 +6,47 @@
 //! The directories are discovered from what git tracks, never from a list written here. A hard-coded list
 //! cannot detect the very thing this check exists to catch, which is a directory nobody remembered.
 //!
-//! A directory needs a pipeline only once it holds something to build. Documentation-only directories are
-//! covered by the workflow that carries no path filter at all; the moment source lands in one of them, this
-//! check starts demanding a pipeline.
+//! Coverage is read from the `paths` list of a workflow's push trigger and from nothing else. A `paths-ignore`
+//! list is the opposite of coverage, and a filter that names a sibling covers the sibling, never the parent.
+//! One directory is exempt and named as such: `.github` is consumed by the platform rather than built by a
+//! pipeline, and the workflows that carry no filter at all run over it on every change.
 
-use adiungere_guarantees::{TextFile, tracked_paths, workflow_files};
+use adiungere_guarantees::{TextFile, is_markdown_path, tracked_paths, workflow_files};
 use std::collections::BTreeSet;
 
-/// Every quoted string in a workflow that looks like a path filter.
+/// The one directory whose contents are run by the platform rather than built by a pipeline.
+const PLATFORM_DIRECTORY: &str = ".github";
+
+/// Every entry under a `paths:` list in a workflow, in the order found.
 fn declared_filters(workflows: &[TextFile]) -> BTreeSet<String> {
     let mut filters = BTreeSet::new();
 
     for file in workflows {
+        let mut collecting = false;
+
         for line in file.contents.lines() {
             let trimmed = line.trim();
 
-            let Some(candidate) = trimmed
-                .strip_prefix("- '")
-                .and_then(|rest| rest.strip_suffix('\''))
-            else {
+            if let Some(key) = trimmed.strip_suffix(':')
+                && !key.contains(' ')
+            {
+                collecting = key == "paths";
+                continue;
+            }
+
+            if !collecting {
+                continue;
+            }
+
+            let Some(entry) = trimmed.strip_prefix("- ") else {
+                collecting = false;
                 continue;
             };
 
-            if candidate.contains('/') {
-                filters.insert(candidate.to_owned());
+            let value = entry.trim().trim_matches(|c| c == '\'' || c == '"');
+
+            if value.contains('/') {
+                filters.insert(value.to_owned());
             }
         }
     }
@@ -37,55 +54,31 @@ fn declared_filters(workflows: &[TextFile]) -> BTreeSet<String> {
     filters
 }
 
-/// Whether a path is prose rather than something a pipeline has to build.
-fn is_markdown(path: &str) -> bool {
-    std::path::Path::new(path)
-        .extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
-}
-
-/// Directories at the first and second level that hold at least one tracked file that is not Markdown.
+/// Every directory that directly holds at least one tracked file that is not prose.
 fn directories_holding_source(paths: &[String]) -> BTreeSet<String> {
-    let mut directories = BTreeSet::new();
-
-    for path in paths {
-        if is_markdown(path) {
-            continue;
-        }
-
-        let segments: Vec<&str> = path.split('/').collect();
-
-        if segments.len() > 1
-            && let Some(first) = segments.first()
-        {
-            directories.insert((*first).to_owned());
-
-            if segments.len() > 2
-                && let Some(second) = segments.get(1)
-            {
-                directories.insert(format!("{first}/{second}"));
-            }
-        }
-    }
-
-    directories
+    paths
+        .iter()
+        .filter(|path| !is_markdown_path(path))
+        .filter_map(|path| path.rsplit_once('/').map(|(directory, _)| directory.to_owned()))
+        .collect()
 }
 
-fn is_covered(directory: &str, filters: &BTreeSet<String>) -> bool {
-    let mut probe = Some(directory);
-
-    while let Some(current) = probe {
-        if filters
-            .iter()
-            .any(|filter| filter.starts_with(&format!("{current}/")))
-        {
-            return true;
+/// Whether a filter builds a directory: a glob over the directory or one of its ancestors, or a file named
+/// directly inside the directory that is itself tracked source.
+fn is_covered(directory: &str, filters: &BTreeSet<String>, paths: &[String]) -> bool {
+    filters.iter().any(|filter| {
+        if let Some(root) = filter.strip_suffix("/**") {
+            return directory == root || directory.starts_with(&format!("{root}/"));
         }
 
-        probe = current.rsplit_once('/').map(|(parent, _)| parent);
-    }
+        filter.rsplit_once('/').is_some_and(|(parent, _)| {
+            parent == directory && !is_markdown_path(filter) && paths.iter().any(|path| path == filter)
+        })
+    })
+}
 
-    false
+fn is_platform(directory: &str) -> bool {
+    directory == PLATFORM_DIRECTORY || directory.starts_with(&format!("{PLATFORM_DIRECTORY}/"))
 }
 
 #[test]
@@ -99,14 +92,15 @@ fn every_directory_holding_source_is_built_by_a_pipeline() {
     // Act
     let uncovered: Vec<&String> = directories
         .iter()
-        .filter(|directory| !is_covered(directory, &filters))
+        .filter(|directory| !is_platform(directory))
+        .filter(|directory| !is_covered(directory, &filters, &paths))
         .collect();
 
     // Assert
     assert!(
         uncovered.is_empty(),
         "These directories hold source and no workflow path filter builds them. Add a pipeline, or extend \
-         an existing one:\n  {}",
+         an existing one's paths list:\n  {}",
         uncovered
             .iter()
             .map(|directory| directory.as_str())
@@ -116,55 +110,69 @@ fn every_directory_holding_source_is_built_by_a_pipeline() {
 }
 
 #[test]
-fn the_check_detects_a_directory_nobody_built() {
-    // A check that considered everything covered would pass forever while proving nothing.
+fn a_sibling_filter_does_not_cover_the_parent() {
+    // This is the hole that was found: a filter over one application directory read as coverage of every
+    // application directory, so a new one could be added with no pipeline and the check stayed green.
 
     // Arrange
-    let workflows = workflow_files().unwrap();
-    let filters = declared_filters(&workflows);
+    let filters: BTreeSet<String> = ["apps/site/**".to_owned()].into_iter().collect();
+    let paths = vec!["apps/site/public/index.html".to_owned()];
 
-    // Act
-    let verdict = is_covered("a-directory-nobody-declared", &filters);
-
-    // Assert
+    // Act and assert
+    assert!(is_covered("apps/site", &filters, &paths));
+    assert!(is_covered("apps/site/public", &filters, &paths));
     assert!(
-        !verdict,
-        "A directory named by no filter must be reported as uncovered."
+        !is_covered("apps", &filters, &paths),
+        "The parent is not covered by a sibling's glob."
+    );
+    assert!(
+        !is_covered("apps/windows", &filters, &paths),
+        "A sibling is not covered by another's glob."
     );
 }
 
 #[test]
-fn the_check_accepts_a_directory_an_ancestor_filter_covers() {
-    // A filter may legitimately name a parent, so coverage climbs. Without this the check would demand a
-    // filter per level and be worked around rather than satisfied.
-
+fn a_paths_ignore_list_is_not_coverage() {
     // Arrange
-    let filters: BTreeSet<String> = ["apps/site/**".to_owned()].into_iter().collect();
+    let workflow = TextFile {
+        path: ".github/workflows/x.yml".to_owned(),
+        contents: "on:\n  push:\n    paths-ignore:\n      - 'core/**'\n    paths:\n      - 'apps/site/**'\n"
+            .to_owned(),
+    };
 
     // Act
-    let covered_directly = is_covered("apps/site", &filters);
-    let covered_by_ancestor = is_covered("apps", &filters);
+    let filters = declared_filters(&[workflow]);
 
     // Assert
+    assert_eq!(filters, ["apps/site/**".to_owned()].into_iter().collect());
+}
+
+#[test]
+fn a_file_filter_covers_its_directory_only_when_it_names_tracked_source() {
+    // Arrange
+    let filters: BTreeSet<String> = ["core/README.md".to_owned(), "scripts/gate.sh".to_owned()]
+        .into_iter()
+        .collect();
+    let paths = vec!["core/README.md".to_owned(), "scripts/gate.sh".to_owned()];
+
+    // Act and assert
     assert!(
-        covered_directly,
-        "A directory its own filter names must be covered."
+        !is_covered("core", &filters, &paths),
+        "Prose named by a filter builds nothing."
     );
     assert!(
-        covered_by_ancestor,
-        "A parent of a filtered directory must be covered."
+        is_covered("scripts", &filters, &paths),
+        "A tracked source file named by a filter covers its directory."
     );
 }
 
 #[test]
 fn a_documentation_only_directory_is_not_demanded_of() {
-    // The complement. Demanding a pipeline for a directory holding only prose would make the guarantee
-    // unsatisfiable, and the usual answer to that is a filter that builds nothing.
-
     // Arrange
     let paths = vec![
         "docs/roadmap.md".to_owned(),
         "docs/adr/0001-a-single-repository.md".to_owned(),
+        "design/README.markdown".to_owned(),
     ];
 
     // Act
@@ -191,11 +199,11 @@ fn the_scan_reads_real_directories_and_real_filters() {
         "No path filter was read; the check above is inert."
     );
     assert!(
-        !directories.is_empty(),
-        "No directory was discovered; the check above is inert."
+        directories.contains("core/crates/adiungere-cli/src"),
+        "The Rust sources were not discovered, so the scan is not reading the repository: {directories:?}"
     );
     assert!(
-        directories.contains("core"),
-        "The Rust workspace was not discovered, so the scan is not reading the repository."
+        directories.contains("scripts"),
+        "The scripts directory was not discovered: {directories:?}"
     );
 }

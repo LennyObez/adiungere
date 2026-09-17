@@ -62,10 +62,12 @@ does not, is stated in the interface rather than left to inference
 Enforced today, each by a test in the guarantee suite:
 
 - Every workflow action is pinned to a commit, so a moved tag cannot substitute code into a pipeline.
-- No unsafe code exists anywhere, and no library or binary code may panic.
+- No unsafe code exists anywhere; the constructs that panic by design are denied outside tests; and
+  arithmetic is checked in every build, so an overflow surfaces as a defect rather than wrapping into a wrong
+  offset that a file would carry silently.
 - No tracked file carries a path, an address or a private key from a development environment.
-- The dependency policy admits no reciprocal licence, no unknown registry and no git source, and the lock
-  file is committed.
+- The dependency policy admits exactly the accepted licences, none of which reaches the work as a whole,
+  no unknown registry and no git source, and the lock file is committed.
 
 Committed, with the milestone that enforces each: [`docs/guarantees.md`](docs/guarantees.md).
 

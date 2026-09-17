@@ -1,0 +1,25 @@
+[package]
+name = "adiungere-scan"
+description = "Finds dashcam recordings by name and by structure, pairs the files of one-file-per-camera layouts, and notes the signs that a file was rewritten."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+[dependencies]
+adiungere-isobmff = { path = "../adiungere-isobmff" }
+adiungere-manifest = { path = "../adiungere-manifest" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+adiungere-fixtures = { path = "../adiungere-fixtures" }
+
+[lints]
+workspace = true

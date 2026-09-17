@@ -9,10 +9,11 @@ Accepted
 The output of this product may be handed to an insurer or filed in a court bundle. That makes the wording of
 every status, badge and report a load-bearing part of the design rather than copy to be written at the end.
 
-Two things constrain it. The published guidance on video authentication gives a human examiner three possible
-conclusions, warns that language implying absolute certainty should be avoided, and states that metadata
-cannot be relied upon in isolation. An automatic tool is not an examiner and reaches none of those
-conclusions.
+Two things constrain it. As the planning research read it, the published guidance on video authentication
+gives a human examiner three possible conclusions, warns that language implying absolute certainty should be
+avoided, and states that metadata cannot be relied upon in isolation; probe **P26** quotes the primary text
+before any of that wording reaches a guide. An automatic tool is not an examiner and reaches none of those
+conclusions, whatever their exact wording turns out to be.
 
 And the strongest true statement this product can make is narrow: that a sequence of bytes equals a digest
 recorded earlier. Everything a person actually wants to know, whether the recording is genuine and whether

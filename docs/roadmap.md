@@ -15,33 +15,39 @@ A milestone produces **one signed commit**. The pull requests that led to it sta
 ## M0: Foundation
 
 *Done when a pull request that deliberately violates each guarantee turns the corresponding gate red, the
-repository shows the settings, ruleset, labels, milestones, epics and project of the house template, a static
+repository shows the settings, ruleset, labels, milestones, epics and project this list declares, a static
 placeholder page is served over HTTPS at adiungere.com, and the first signed commit lands on main with
 authorisation.*
 
-- [ ] Repository `LennyObez/adiungere`, public, discussions on, wiki off, squash and rebase only, merged
+- [x] Repository `LennyObez/adiungere`, public, discussions on, wiki off, squash and rebase only, merged
       branches deleted
-- [ ] Apache-2.0 with `NOTICE`, no contributor agreement, inbound equals outbound stated in `CONTRIBUTING.md`
-- [ ] Health files, `.editorconfig`, `.gitattributes`, `.gitignore`
-- [ ] Declared label set applied from the repository, dependency updates for cargo and actions, issue forms
+- [x] Apache-2.0 with `NOTICE`, no contributor agreement, inbound equals outbound stated in `CONTRIBUTING.md`
+- [x] Health files, `.editorconfig`, `.gitattributes`, `.gitignore`
+- [x] Declared label set applied from the repository, dependency updates for cargo and actions, issue forms
       for a bug, a feature and a probe, pull request template, code owners
-- [ ] Ruleset on the default branch: deletion, non fast-forward, linear history, signed commits, pull request
+- [x] Ruleset on the default branch: deletion, non fast-forward, linear history, signed commits, pull request
       with thread resolution, squash or rebase only, required checks named, no bypass
-- [ ] Milestones M0 to M10, one epic per milestone, public project with the house field set
-- [ ] Roadmap, architecture, testing, getting started, evidence register, decision record template and the
+- [x] Milestones M0 to M10, one epic per milestone, public project with the field set the project's own
+      description explains
+- [x] Roadmap, architecture, testing, getting started, evidence register, decision record template and the
       founding records, each with the check that enforces it
-- [ ] Placeholder README in every directory that is empty until a later milestone
-- [ ] Rust workspace with the pinned toolchain, workspace lints, dependency policy and cargo aliases
-- [ ] Evidence register readable as data: `adiungere probes` lists it, shows one entry and refuses a register
+- [x] Placeholder README in every directory that is empty until a later milestone
+- [x] Rust workspace with the pinned toolchain, workspace lints, dependency policy and cargo aliases
+- [x] Evidence register readable as data: `adiungere probes` lists it, shows one entry and refuses a register
       that disagrees with this roadmap
-- [ ] Guarantee suite for the eleven M0 properties, each watched failing against a deliberate violation
-      before being trusted
-- [ ] Continuous integration: a repository-wide workflow with no path filter, a core workflow, a site
+- [x] Guarantee suite for the M0 properties, each watched failing against a deliberate violation before
+      being trusted
+- [x] Continuous integration: a repository-wide workflow with no path filter, a core workflow, a site
       workflow, the label synchroniser, and code scanning over both the Rust and the workflow languages, with
       every action pinned to a commit and tokens read-only by default
-- [ ] Static site with a security contact at the well-known path, deployed from the default branch
-- [ ] Probe P19 recorded: what the production host serves, and how a deployment reaches it
-- [ ] Citation metadata, and the decision not to publish a funding file recorded
+- [x] Static site with a security contact at the well-known path, deployed from the default branch
+- [x] Probe P19 recorded: what the production host serves, and how a deployment reaches it
+- [x] Citation metadata, and the decision not to publish a funding file recorded
+
+Two of these lines closed with the M1 commit rather than the M0 one, and the roadmap said so in between: the
+site went live after the M0 commit was published, and the probe that measures the host could only be
+answered once it was. A commit already published is never rewritten to make a milestone look complete
+earlier than it was.
 
 Deferred on purpose, with the reason written where it belongs rather than hidden: **the external tool version
 pins** (`tools/versions.toml`) arrive in M1 with the first oracle that reads them, because a pin file nothing
@@ -55,21 +61,28 @@ recipe, the same commands on a moov-last re-export report equal fingerprints and
 moov-only inspection of the reference clip reads fewer than 256 KiB, the required checks pass on the public
 synthetic fixture alone, and every probe listed here has a verdict in the evidence register.*
 
-- [ ] Box reader: opaque ranges by default, typed views only where a value is needed, `udta` and unknown
+- [x] Box reader: opaque ranges by default, typed views only where a value is needed, `udta` and unknown
       boxes as ranges, sample description entries copied as ranges
-- [ ] Sample iterator in decode order, yielding stored bytes
-- [ ] Fingerprints: track fingerprint version 1, decoder configuration digest, Annex B secondary digest,
+- [x] Sample iterator in decode order, yielding stored bytes
+- [x] Fingerprints: track fingerprint version 1, decoder configuration digest, Annex B secondary digest,
       whole-file digest, writer structural fingerprint
-- [ ] Integrity specification with a reference implementation and the third-party commands that reproduce it
-- [ ] Manifest types with unknown fields refused, a published schema, and graded verification
-- [ ] Scanner: naming grammars per brand, bounded moov probe, paired-file sources, derivative detector
-- [ ] Command line: inspect, fingerprint, detect, verify, report, with machine and human output
-- [ ] Public synthetic fixture carrying every property the reference clip has, and the private clip pinned by
+- [x] Integrity specification with a reference implementation and the third-party commands that reproduce it
+- [x] Manifest types with unknown fields refused, a published schema, and graded verification
+- [x] Scanner: naming grammars by shape, bounded moov probe, paired-file sources, derivative detector
+- [x] Command line: inspect, fingerprint, detect, verify, report, with machine and human output
+- [x] Public synthetic fixture carrying every property the reference clip has, and the private clip pinned by
       digest and used only in the nightly pipeline
-- [ ] External tool version pins, read by the pipeline rather than written in it
-- [ ] Fuzzing on a dated nightly, with mutation testing and Miri
-- [ ] Probes P01, P02, P03, P15, P25, P27, P34, P35 and P36 recorded
-- [ ] Core platform matrix, including a WebAssembly build
+- [x] External tool version pins, read by the pipeline rather than written in it
+- [x] Fuzzing on a dated nightly, with mutation testing and Miri
+- [x] Probes P01, P02, P03, P15, P25, P27, P34, P35, P36 and P37 recorded, with P15, P25, P34, P35, P36 and
+      P37 measured ahead of the code they inform
+- [x] Core platform matrix, including a WebAssembly build
+
+Two probes carry a half that only the pipeline can measure, and the evidence register says so on each: P01's
+Apple reader runs on the macOS runner, and P36's Windows and macOS builds run in the matrix, so their first
+measurement is the first run of the milestone's pull request rather than a maintainer's machine. The
+nightly pipeline is the same: written, watched failing where a guarantee reads it, and first executed on
+the default branch after this milestone lands.
 
 ## M2: Lossless extraction
 
@@ -127,7 +140,7 @@ check page, with footage never leaving the device, on current Chrome, Firefox, S
 - [ ] Signing and time-stamping relay behind the host, with its data statement and its operating runbook
 - [ ] Site: landing, application, check, documentation, installable, cache and security headers
 - [ ] Browser tests on three engines with a network assertion
-- [ ] Probes P06, P07, P08, P10, P12, P21, P28, P29 and P32 recorded
+- [ ] Probes P06, P07, P08, P10, P12, P21, P28, P29, P32 and P38 recorded
 
 ## M5: Desktop for Windows and Linux
 
@@ -157,8 +170,14 @@ a composed rendition, no share affordance is reachable without it, and the telem
 - [ ] Map and graph components shared by the website and the desktop shells
 - [ ] On-device masking, with the detection library settled by its probe or the manual fallback shipped and
       named as such
-- [ ] Share gate: sharing passes through masking or an explicit acknowledgement
-- [ ] Probe P33 recorded, since automatic masking depends entirely on its answer
+- [ ] Masking as an explicit choice at export, never a default: a file for a claim keeps every face and
+      plate, because an insurer or a court needs them and a masked file is a re-encoded rendition that is
+      no longer the evidence; a file for publishing is masked. The choice is named in the manifest.
+- [ ] Share gate: sharing passes through masking or an explicit acknowledgement that the file is unmasked
+- [ ] Burned-in clock read as a fifth clock beside the others, and the burned-in position strip offered to
+      the masking step, as probe P39 measured
+- [ ] Probes P33 and P39 recorded, since automatic masking depends entirely on the first and the clock and
+      the strip on the second
 
 ## M7: Android
 
@@ -207,10 +226,10 @@ printable verification report exists for a claim file.*
 ## M10: Opening
 
 *Done when an external audit of the integrity claims and the supply chain passes, the open-source best
-practices badge is held, the name has cleared a trademark search in the relevant classes, and every
-"committed, not yet enforced" row in the README has moved to "enforced today".*
+practices badge is held, the name has cleared a trademark search in the relevant classes, and the ledger of
+guarantees holds no committed row, only enforced ones.*
 
 - [ ] External audit of the fingerprint specification, the wording and the release provenance
 - [ ] Trademark clearance, with renaming exercised through the single configuration value if needed
 - [ ] Supply-chain scorecard published with its score explained, best practices badge held
-- [ ] README guarantee tables reconciled by a test
+- [ ] Every committed guarantee moved to the enforced table, with the test that proves it

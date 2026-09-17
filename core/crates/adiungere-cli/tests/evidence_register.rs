@@ -87,6 +87,145 @@ fn an_example_inside_a_code_fence_is_not_an_entry() {
 }
 
 #[test]
+fn a_heading_that_almost_names_a_probe_is_refused() {
+    // `## P001`, `## P37:` and `## P1` are the spellings a hand slips into. Each would once have been read as
+    // prose, and the entry under it would have vanished from the register without a word.
+
+    // Arrange
+    let spellings = [
+        "## P001 A title",
+        "## P37: A title",
+        "## P1 A title",
+        "## P00 A title",
+    ];
+
+    for spelling in spellings {
+        let source = register(&format!(
+            "{spelling}\n\n- **Verdict:** not started\n- **Milestone:** M1\n- **Question:** q.\n\
+             - **Method:** m.\n- **Decides:** d.\n"
+        ));
+
+        // Act
+        let outcome = Register::parse(&source);
+
+        // Assert
+        assert!(
+            matches!(outcome, Err(ParseError::MalformedHeading { line: 5, .. })),
+            "{spelling}: got {outcome:?}"
+        );
+    }
+}
+
+#[test]
+fn a_field_bullet_outside_any_entry_is_refused() {
+    // A bullet that belongs to nothing is an entry whose heading was lost, most often to a level-three
+    // heading that reads like a probe heading and is not one.
+
+    // Arrange
+    let source = register(
+        "### P37 A title at the wrong level\n\n\
+         - **Verdict:** not started\n\
+         - **Milestone:** M1\n\
+         - **Question:** a question.\n\
+         - **Method:** a method.\n\
+         - **Decides:** a decision.\n",
+    );
+
+    // Act
+    let outcome = Register::parse(&source);
+
+    // Assert
+    assert!(
+        matches!(
+            outcome,
+            Err(ParseError::StrayBullet {
+                line: 7,
+                ref label
+            }) if label == "Verdict"
+        ),
+        "got {outcome:?}"
+    );
+}
+
+#[test]
+fn a_fence_that_never_closes_is_refused() {
+    // An unterminated fence swallows every entry after it. Refusing the file is the only outcome that does
+    // not under-report the register.
+
+    // Arrange
+    let source = format!(
+        "{}```console\n$ a command whose fence is never closed\n\n{}",
+        register(&entry("P01", "M1", "not started")),
+        entry("P02", "M1", "not started")
+    );
+
+    // Act
+    let outcome = Register::parse(&source);
+
+    // Assert
+    assert!(
+        matches!(outcome, Err(ParseError::UnterminatedFence { line: 13 })),
+        "got {outcome:?}"
+    );
+}
+
+#[test]
+fn a_fenced_command_inside_a_result_is_kept_verbatim() {
+    // The command that produced a finding is part of the finding. A parser that skipped fences would drop
+    // exactly the line a reader needs to reproduce the measurement.
+
+    // Arrange
+    let source = register(
+        "## P01 A title\n\n\
+         - **Verdict:** measured\n\
+         - **Milestone:** M1\n\
+         - **Question:** a question.\n\
+         - **Method:** a method.\n\
+         - **Decides:** a decision.\n\
+         - **Result:** the digest below.\n\n\
+         ```console\n\
+         $ sha256sum clip.mp4\n\
+         ```\n",
+    );
+
+    // Act
+    let parsed = Register::parse(&source).unwrap();
+
+    // Assert
+    let result = parsed.probes().first().unwrap().result.clone().unwrap();
+    assert!(
+        result.contains("```console\n$ sha256sum clip.mp4\n```"),
+        "got {result:?}"
+    );
+}
+
+#[test]
+fn an_indented_line_after_a_blank_line_is_not_a_continuation() {
+    // A continuation belongs to the bullet directly above it. After a blank line the indented text is a
+    // paragraph, and gluing it onto the previous field would hide it inside a sentence nobody reads back.
+
+    // Arrange
+    let source = register(
+        "## P01 A title\n\n\
+         - **Verdict:** not started\n\
+         - **Milestone:** M1\n\
+         - **Question:** a question.\n\
+         - **Method:** a method.\n\
+         - **Decides:** a decision.\n\n  \
+         An indented paragraph after a blank line.\n",
+    );
+
+    // Act
+    let outcome = Register::parse(&source);
+
+    // Assert
+    assert!(
+        matches!(outcome, Err(ParseError::StrayLine { line: 13, .. })),
+        "got {outcome:?}"
+    );
+}
+
+#[test]
 fn entries_out_of_order_are_refused() {
     // Ascending order is what stops the file from growing a second entry for one identifier in a place
     // nobody looks.
@@ -353,6 +492,90 @@ fn a_probe_assigned_to_a_milestone_that_does_not_exist_is_reported() {
             .iter()
             .any(|discrepancy| matches!(discrepancy, Discrepancy::UnknownMilestone { .. })),
         "got {found:?}"
+    );
+}
+
+#[test]
+fn a_probe_named_only_inside_a_fence_or_a_comment_is_not_mentioned() {
+    // A fenced block is an example and an HTML comment is hidden from the reader. A probe named in either
+    // would satisfy the reconciliation without the roadmap ever committing to it in the open.
+
+    // Arrange
+    let roadmap = Roadmap::parse(
+        "# Roadmap\n\n## M1: A milestone\n\n```\nProbe P01 in an example.\n```\n\n<!-- Probe P02, hidden. -->\n\
+         Probe P03 in the open.\n",
+    )
+    .unwrap();
+
+    // Act
+    let mentioned: Vec<String> = roadmap
+        .section("M1".parse().unwrap())
+        .unwrap()
+        .probe_mentions()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+
+    // Assert
+    assert_eq!(mentioned, vec!["P03"]);
+}
+
+#[test]
+fn a_heading_that_is_not_a_milestone_ends_the_section_before_it() {
+    // What follows an appendix heading belongs to no milestone. Attributing it to the last milestone that
+    // happened to be open would let an appendix satisfy that milestone's reconciliation.
+
+    // Arrange
+    let roadmap =
+        Roadmap::parse("# Roadmap\n\n## M1: A milestone\n\nProbe P01.\n\n## Appendix\n\nProbe P02.\n")
+            .unwrap();
+
+    // Act
+    let mentioned: Vec<String> = roadmap
+        .section("M1".parse().unwrap())
+        .unwrap()
+        .probe_mentions()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+
+    // Assert
+    assert_eq!(mentioned, vec!["P01"]);
+}
+
+#[test]
+fn a_milestone_heading_with_a_leading_zero_is_refused() {
+    // Arrange
+    let source = "# Roadmap\n\n## M02: A milestone\n\nProbe P01.\n";
+
+    // Act
+    let outcome = Roadmap::parse(source);
+
+    // Assert
+    assert!(
+        matches!(
+            outcome,
+            Err(adiungere_cli::roadmap::ParseError::MalformedHeading { line: 3, .. })
+        ),
+        "got {outcome:?}"
+    );
+}
+
+#[test]
+fn a_roadmap_whose_fence_never_closes_is_refused() {
+    // Arrange
+    let source = "# Roadmap\n\n## M1: A milestone\n\n```\nProbe P01.\n";
+
+    // Act
+    let outcome = Roadmap::parse(source);
+
+    // Assert
+    assert!(
+        matches!(
+            outcome,
+            Err(adiungere_cli::roadmap::ParseError::UnterminatedFence { line: 5 })
+        ),
+        "got {outcome:?}"
     );
 }
 

@@ -1,0 +1,26 @@
+[package]
+name = "adiungere-fingerprint"
+description = "Per-track fingerprints, the elementary stream digest, the whole-file digest and the writer's structural fingerprint, each reproducible with ordinary tools."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+[dependencies]
+adiungere-isobmff = { path = "../adiungere-isobmff" }
+schemars = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+adiungere-fixtures = { path = "../adiungere-fixtures" }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

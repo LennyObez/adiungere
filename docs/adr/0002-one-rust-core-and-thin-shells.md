@@ -92,7 +92,9 @@ today, and the check is cheap to repeat: probe **P02** and the export guarantees
 ## Security impact
 
 Positive. One parser to fuzz rather than six, written in a language that removes whole classes of parsing
-defect, with unsafe code forbidden outside the two binding crates where it is justified at the site of use.
+defect, with unsafe code forbidden workspace-wide. The two binding crates that will need it cannot lift a
+forbid, so each restates the lint table with unsafe code denied instead, justifies every site of use, and is
+named in the guarantee as doing so. Until they exist, the list of such crates is empty.
 
 ## Privacy impact
 

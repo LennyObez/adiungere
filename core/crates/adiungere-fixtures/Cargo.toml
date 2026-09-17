@@ -1,0 +1,27 @@
+[package]
+name = "adiungere-fixtures"
+description = "Builds the public synthetic recordings the test suite runs on, from a few committed pre-encoded frames and no encoder."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+[lib]
+name = "adiungere_fixtures"
+path = "src/lib.rs"
+
+[[bin]]
+name = "adiungere-fixtures"
+path = "src/main.rs"
+
+[dependencies]
+adiungere-isobmff = { path = "../adiungere-isobmff" }
+
+[lints]
+workspace = true

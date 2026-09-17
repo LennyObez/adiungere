@@ -6,12 +6,23 @@
 //!
 //! The reverse matters as much. A README still claiming to be empty in a directory that now holds code is a
 //! document contradicting the tree it sits in, and it is the kind of thing nobody notices for a year.
+//!
+//! A README is recognised under any casing and any Markdown extension a renderer shows, so that renaming one
+//! does not take its directory out of the rule.
 
-use adiungere_guarantees::{TextFile, read_at, tracked_paths, tracked_text_files};
+use adiungere_guarantees::{TextFile, is_markdown_path, read_at, tracked_paths, tracked_text_files};
 use std::collections::BTreeMap;
 
 /// The sentence a placeholder README has to contain.
 const MARKER: &str = "Empty until M";
+
+/// Whether a path is a README that a renderer would show at the top of its directory.
+fn is_a_readme(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+
+    stem.eq_ignore_ascii_case("readme") && is_markdown_path(path)
+}
 
 /// Every tracked path, grouped by each directory it sits under, at every depth.
 fn paths_by_directory(paths: &[String]) -> BTreeMap<String, Vec<String>> {
@@ -38,9 +49,12 @@ fn placeholder_directories(paths: &[String]) -> Vec<String> {
         .into_iter()
         .filter(|(directory, held)| {
             held.len() == 1
-                && held
-                    .first()
-                    .is_some_and(|only| *only == format!("{directory}/README.md"))
+                && held.first().is_some_and(|only| {
+                    is_a_readme(only)
+                        && only
+                            .rsplit_once('/')
+                            .is_some_and(|(parent, _)| parent == directory)
+                })
         })
         .map(|(directory, _)| directory)
         .collect()
@@ -57,7 +71,7 @@ fn milestone_named_in(contents: &str) -> Option<String> {
 fn readmes_claiming_to_be_empty(files: &[TextFile]) -> Vec<&TextFile> {
     files
         .iter()
-        .filter(|file| file.path.ends_with("/README.md") && file.contents.contains(MARKER))
+        .filter(|file| is_a_readme(&file.path) && file.contents.contains(MARKER))
         .collect()
 }
 
@@ -72,11 +86,14 @@ fn every_empty_directory_says_which_milestone_fills_it() {
     let silent: Vec<&String> = placeholders
         .iter()
         .filter(|directory| {
-            let readme = format!("{directory}/README.md");
-
-            !files
-                .iter()
-                .any(|file| file.path == readme && file.contents.contains(MARKER))
+            !files.iter().any(|file| {
+                is_a_readme(&file.path)
+                    && file
+                        .path
+                        .rsplit_once('/')
+                        .is_some_and(|(parent, _)| parent == *directory)
+                    && file.contents.contains(MARKER)
+            })
         })
         .collect();
 
@@ -103,7 +120,7 @@ fn no_directory_claims_to_be_empty_while_holding_something() {
     // Act
     let contradictory: Vec<String> = readmes_claiming_to_be_empty(&files)
         .iter()
-        .map(|file| file.path.trim_end_matches("/README.md").to_owned())
+        .filter_map(|file| file.path.rsplit_once('/').map(|(parent, _)| parent.to_owned()))
         .filter(|directory| !placeholders.contains(directory))
         .collect();
 
@@ -165,6 +182,43 @@ fn every_placeholder_names_a_milestone_at_all() {
 }
 
 #[test]
+fn the_check_detects_a_populated_directory_still_claiming_to_be_empty() {
+    // The reverse rule, exercised on a sample: a README with the marker in a directory holding code.
+
+    // Arrange
+    let paths = vec!["design/README.md".to_owned(), "design/tokens.json".to_owned()];
+    let files = vec![TextFile {
+        path: "design/README.md".to_owned(),
+        contents: "> **Empty until M4.**".to_owned(),
+    }];
+
+    // Act
+    let placeholders = placeholder_directories(&paths);
+    let claiming: Vec<&TextFile> = readmes_claiming_to_be_empty(&files);
+
+    // Assert
+    assert!(
+        !placeholders.contains(&"design".to_owned()),
+        "A directory holding code is not a placeholder."
+    );
+    assert_eq!(
+        claiming.len(),
+        1,
+        "The README still claims to be empty and must be reported."
+    );
+}
+
+#[test]
+fn a_readme_is_recognised_under_any_casing_and_extension() {
+    // Act and assert
+    assert!(is_a_readme("infra/README.md"));
+    assert!(is_a_readme("infra/readme.md"));
+    assert!(is_a_readme("infra/Readme.markdown"));
+    assert!(!is_a_readme("infra/README.txt"));
+    assert!(!is_a_readme("infra/notes.md"));
+}
+
+#[test]
 fn the_check_finds_the_placeholders_that_exist_today() {
     // Without this, a change to how directories are grouped would let both checks pass by finding nothing.
 
@@ -182,27 +236,10 @@ fn the_check_finds_the_placeholders_that_exist_today() {
     );
     assert!(
         placeholders.contains(&"design".to_owned()),
-        "The design directory is a placeholder today and was not found: {placeholders:?}"
+        "The design directory is a placeholder today."
     );
-}
-
-#[test]
-fn a_populated_directory_is_not_read_as_a_placeholder() {
-    // The complement: a check that called everything a placeholder would demand the marker everywhere.
-
-    // Arrange
-    let paths = tracked_paths().unwrap();
-
-    // Act
-    let placeholders = placeholder_directories(&paths);
-
-    // Assert
     assert!(
         !placeholders.contains(&"core".to_owned()),
         "The Rust workspace is not a placeholder."
-    );
-    assert!(
-        !placeholders.contains(&"docs".to_owned()),
-        "The documentation directory is not a placeholder."
     );
 }

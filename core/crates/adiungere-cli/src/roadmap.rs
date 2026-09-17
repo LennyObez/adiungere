@@ -4,7 +4,10 @@
 //! module reads its milestone headings and the text under each of them, which is what makes it possible to
 //! ask whether a milestone actually names the probes assigned to it.
 //!
-//! Only the structure is read. What a milestone promises is prose, and prose is for people.
+//! Only the structure is read. What a milestone promises is prose, and prose is for people. Two things are
+//! deliberately not read as prose: a fenced block, which is an example rather than a statement, and an HTML
+//! comment, which is a note hidden from the reader. A probe named in either is not a probe the roadmap
+//! mentions.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -13,6 +16,7 @@ use std::str::FromStr;
 use serde::{Serialize, Serializer};
 
 use crate::evidence::{ProbeId, probe_mentions};
+use crate::markdown::{FenceTracker, LineKind, heading, without_html_comments};
 
 /// The identifier of a milestone, written `M0` in the roadmap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -65,7 +69,7 @@ pub struct Section {
     pub id: MilestoneId,
     /// The heading, without the identifier.
     pub title: String,
-    /// Everything written under the heading.
+    /// Everything written under the heading, with fenced blocks and HTML comments removed.
     pub body: String,
     mentions: BTreeSet<ProbeId>,
 }
@@ -89,23 +93,31 @@ impl Roadmap {
     ///
     /// # Errors
     ///
-    /// Returns an error when the file names no milestone, or names them out of order. Both would make a
-    /// reconciliation against the register meaningless while looking like it had run.
+    /// Returns an error when the file names no milestone, names them out of order, spells a milestone
+    /// heading in a way that is almost but not quite a milestone, or opens a fenced block it never closes.
+    /// Each of those would make a reconciliation against the register meaningless while looking like it had
+    /// run.
     pub fn parse(source: &str) -> Result<Self, ParseError> {
-        let mut sections: Vec<(MilestoneId, String, usize, Vec<&str>)> = Vec::new();
-        let mut inside_fence = false;
+        let mut sections: Vec<(MilestoneId, String, Vec<&str>)> = Vec::new();
+        let mut collecting = false;
+        let mut fences = FenceTracker::new();
 
         for (index, raw) in source.lines().enumerate() {
             let line = index + 1;
             let text = raw.trim_end();
 
-            if text.trim_start().starts_with("```") {
-                inside_fence = !inside_fence;
+            if fences.observe(text, line) != LineKind::Outside {
+                continue;
             }
 
-            if !inside_fence && let Some(rest) = text.strip_prefix("## ") {
-                if let Some((id, title)) = split_heading(rest) {
-                    if let Some((previous, _, _, _)) = sections.last()
+            if let Some((2, rest)) = heading(text) {
+                if looks_like_a_milestone_heading(rest) {
+                    let (id, title) = split_heading(rest).ok_or_else(|| ParseError::MalformedHeading {
+                        line,
+                        text: text.to_owned(),
+                    })?;
+
+                    if let Some((previous, _, _)) = sections.last()
                         && id <= *previous
                     {
                         return Err(ParseError::OutOfOrder {
@@ -115,20 +127,24 @@ impl Roadmap {
                         });
                     }
 
-                    sections.push((id, title, line, Vec::new()));
-                    continue;
-                }
-
-                if let Some((_, _, _, body)) = sections.last_mut() {
-                    body.push(text);
+                    sections.push((id, title, Vec::new()));
+                    collecting = true;
+                } else {
+                    // Any other level-two heading ends the milestone before it. What follows belongs to no
+                    // milestone rather than to the last one that happened to be open.
+                    collecting = false;
                 }
 
                 continue;
             }
 
-            if let Some((_, _, _, body)) = sections.last_mut() {
+            if collecting && let Some((_, _, body)) = sections.last_mut() {
                 body.push(text);
             }
+        }
+
+        if let Some(opened) = fences.unterminated() {
+            return Err(ParseError::UnterminatedFence { line: opened });
         }
 
         if sections.is_empty() {
@@ -137,8 +153,8 @@ impl Roadmap {
 
         let sections = sections
             .into_iter()
-            .map(|(id, title, _, body)| {
-                let body = body.join("\n");
+            .map(|(id, title, body)| {
+                let body = without_html_comments(&body.join("\n"));
                 let mentions = probe_mentions(&body);
                 Section {
                     id,
@@ -166,10 +182,17 @@ impl Roadmap {
 }
 
 /// Everything that can be wrong with the roadmap's structure.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
     /// The file names no milestone, so there is nothing to reconcile against.
     Empty,
+    /// A level-two heading starts with a milestone identifier and is not spelt canonically.
+    MalformedHeading {
+        /// The line of the heading.
+        line: usize,
+        /// The heading as written.
+        text: String,
+    },
     /// A milestone appears before one with a lower or equal identifier.
     OutOfOrder {
         /// The line of the offending heading.
@@ -179,6 +202,11 @@ pub enum ParseError {
         /// The identifier before it.
         previous: MilestoneId,
     },
+    /// A fenced block is opened and the file ends before it closes.
+    UnterminatedFence {
+        /// The line that opened it.
+        line: usize,
+    },
 }
 
 impl fmt::Display for ParseError {
@@ -187,9 +215,19 @@ impl fmt::Display for ParseError {
             Self::Empty => {
                 formatter.write_str("the roadmap names no milestone, so nothing can be reconciled against it")
             },
+            Self::MalformedHeading { line, text } => write!(
+                formatter,
+                "line {line}: \"{text}\" starts like a milestone heading and is not one; write \"## M1: A \
+                 title\""
+            ),
             Self::OutOfOrder { line, id, previous } => write!(
                 formatter,
                 "line {line}: {id} comes after {previous}; milestones are in ascending order"
+            ),
+            Self::UnterminatedFence { line } => write!(
+                formatter,
+                "line {line}: a fenced block opens here and never closes, so everything after it would be \
+                 skipped"
             ),
         }
     }
@@ -197,15 +235,18 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
+/// Whether a level-two heading is trying to be a milestone: `M` followed by a digit.
+fn looks_like_a_milestone_heading(rest: &str) -> bool {
+    let mut characters = rest.chars();
+
+    characters.next() == Some('M') && characters.next().is_some_and(|second| second.is_ascii_digit())
+}
+
 /// Splits `M0: Foundation` into its identifier and its title.
 fn split_heading(rest: &str) -> Option<(MilestoneId, String)> {
     let (candidate, title) = rest.split_once(':')?;
     let id = candidate.parse::<MilestoneId>().ok()?;
     let title = title.trim();
 
-    if title.is_empty() {
-        None
-    } else {
-        Some((id, title.to_owned()))
-    }
+    (!title.is_empty()).then(|| (id, title.to_owned()))
 }

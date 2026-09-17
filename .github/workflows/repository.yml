@@ -27,9 +27,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # No version is named here. The toolchain file at the repository root is the only place one exists, and
-      # a guarantee refuses any workflow that restates it.
+      # a guarantee refuses any workflow that restates or overrides it.
       - name: Resolve the pinned toolchain
         run: |
           rustup show active-toolchain
@@ -50,3 +52,34 @@ jobs:
       - name: The evidence register agrees with the roadmap
         working-directory: core
         run: cargo run --quiet -p adiungere-cli -- probes check
+
+  title:
+    name: Pull request title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # A milestone lands on the default branch as one squash commit whose subject is the pull request title,
+    # so the title has to be the commit subject the contribution guide describes: a type, an optional scope,
+    # and a lower-case subject with no trailing full stop, in at most seventy-two characters.
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: The title is a Conventional Commits subject
+        env:
+          # Read through the environment, never interpolated into the script: a title is text an outside
+          # contributor writes.
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -eu
+          pattern='^(feat|fix|perf|refactor|docs|test|chore|security)(\([a-z0-9-]+\))?: [a-z0-9].*[^.]$'
+          if ! printf '%s\n' "$TITLE" | grep -Eq "$pattern"; then
+            printf 'The pull request title is not a Conventional Commits subject.\n'
+            printf 'Expected: <type>(<scope>): <subject>, lower-case, no trailing full stop.\n'
+            printf 'Types: feat, fix, perf, refactor, docs, test, chore, security.\n'
+            exit 1
+          fi
+          if [ "${#TITLE}" -gt 72 ]; then
+            printf 'The pull request title is %s characters long; the limit is 72.\n' "${#TITLE}"
+            exit 1
+          fi
+          printf 'The title is a well-formed subject.\n'

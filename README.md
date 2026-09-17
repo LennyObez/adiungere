@@ -6,7 +6,8 @@ each one without re-encoding it, and keeps the vendor telemetry that every other
 
 The name is Latin: to join, to attach to. Two views of one moment, joined rather than separated.
 
-**Status: early construction.** The foundation is in place; the product is not yet usable. What follows
+**Status: early construction.** The command line inspects a recording, fingerprints every track, finds
+recordings in a library and compares a manifest with a file; nothing plays or exports yet. What follows
 describes the product being built, and [Guarantees](#guarantees) separates the properties a test enforces
 today from those committed to, each against the milestone that will enforce it.
 [`docs/roadmap.md`](docs/roadmap.md) holds the plan.
@@ -20,9 +21,9 @@ and every consumer gallery shows the first track, because that is what its demul
 camera is in the file. Nothing offers to show it.
 
 Reaching it today means a command line and an external tool. That route works, and it silently throws away
-the vendor telemetry box: on a measured reference recording, roughly thirty kilobytes holding the camera
-identity, one satellite fix per second and about twenty motion records per second. It also rewrites the
-container in a way that stops the file playing progressively.
+the vendor telemetry box: on the reference recording measured in the evidence register (probe P37), roughly
+thirty kilobytes holding the camera identity, one satellite fix per second and about twenty motion records
+per second. It also rewrites the container in a way that stops the file playing progressively.
 
 These recordings are used as evidence. Losing the telemetry loses the part a claims handler would have
 believed.
@@ -60,10 +61,14 @@ says a recording is authentic, because nothing can
 | The original recording was not altered before adiungere saw it | **No** | Nothing attests for the camera |
 | What is shown actually happened | **No** | Beyond the reach of any tool |
 
+The first two lines and the fourth hold today: [`docs/integrity.md`](docs/integrity.md) defines the
+fingerprint, the file digest and the vendor box digests, and shows how a stranger reproduces each of them
+with a digest utility, a hundred-line reference script and the common media tool.
+
 Four export classes carry that distinction permanently: an **extraction** copies samples byte for byte into a
-rebuilt container; a **two-track archive** carries both cameras with no encoder; a **verified lossless
-rendition** earns its label only after decoded frames are compared; a **rendition** is re-encoded and says
-so.
+rebuilt container; a **two-track archive** carries both cameras with no encoder; a **pixel-exact
+rendition** earns its label only after every decoded frame has been compared; a **rendition** is re-encoded
+and says so.
 
 ## Architecture
 
@@ -92,12 +97,13 @@ Three tiers: what ships to a person, what the rest of the code consumes, and the
 | `apps/linux` | The Linux shell and its media pipeline | M5 |
 | `apps/site` | adiungere.com | placeholder today, M4 |
 | `apps/windows` | The Windows shell | M5 |
-| `core` | The Rust workspace: the format, the fingerprints, the manifest, the command line | **yes** |
+| `core` | The Rust workspace: the reader, the fingerprints, the manifest, the scanner, the command line, the synthetic corpus, the guarantee suite, the fuzzing project | **yes** |
 | `web` | The shared player and export interface | M4 |
 | `design` | The token source that generates every platform theme | M4 |
-| `docs` | Roadmap, architecture, testing, evidence register, decision records | **yes** |
+| `docs` | Roadmap, architecture, testing, integrity, evidence register, decision records | **yes** |
 | `infra` | How an environment is described and deployed | M4 |
-| `scripts` | The gate runner and the checks that do not belong to a crate | **yes** |
+| `scripts` | The gate runner, the reference fingerprint script, the tool fetcher and the checks that do not belong to a crate | **yes** |
+| `tools` | The pinned versions of the external tools the pipeline runs as oracles, and the oracle harnesses | **yes** |
 
 ## Guarantees
 
@@ -110,34 +116,44 @@ reporting success.
 
 | Guarantee | What it refuses |
 |---|---|
-| G01 | A typographic dash in any tracked file |
-| G02 | A workflow action referenced by a tag rather than a commit, or without its version in a comment |
-| G03 | A directory holding source that no pipeline builds, with the directories discovered from git |
-| G04 | A relative documentation link that resolves to nothing, or a decision record missing from the index |
-| G05 | A path, an address or a private key from a development environment reaching a tracked file |
-| G06 | A file at the repository root that the root does not declare |
-| G07 | A second toolchain pin, a pin that is not patch-exact, or a pipeline that restates the version |
-| G08 | A licence declared inconsistently, an altered licence text, or a reciprocal licence in the policy |
-| G09 | Prose wider than 110 columns, which stops a document being reviewable as a diff |
+| G01 | A typographic dash in any tracked file, as a character, a look-alike or an HTML entity |
+| G02 | An action referenced by a tag rather than a commit or a digest, or without its version in a comment |
+| G03 | A directory holding source that no pipeline's own path list builds, with the directories discovered from git |
+| G04 | A documentation link, in any form, that resolves to nothing, leaves the repository, or names a missing anchor |
+| G05 | A path, an address, a credential or a key from a development or running environment reaching a tracked file |
+| G06 | A file or a directory at the repository root that the root does not declare with a reason |
+| G07 | A second toolchain pin, a pin that is not patch-exact, a minimum that disagrees with it, or a pipeline or script that overrides it |
+| G08 | A licence declared inconsistently, a licence text that differs from its publication, or a policy admitting a licence outside the accepted set |
+| G09 | Prose wider than 110 characters, which stops a document being reviewable as a diff |
 | G10 | A directory that claims to be empty and is not, or is empty and does not say until when |
-| G11 | Unsafe code, or a panicking construct outside a test |
-| G20 | A probe the roadmap and the evidence register disagree about |
-| G52 | A count or a table in the documentation that no longer matches the repository |
+| G11 | Unsafe code, a panicking construct outside a test, or an attribute that switches either rule off |
+| G12 | A reader whose ranges do not tile a recording, or re-emit it with a byte changed, unknown boxes included |
+| G13 | A typed user-data box anywhere, or a vendor child that is not recoverable byte for byte after reading |
+| G14 | A fingerprint the reference script does not reproduce, or a stream digest the pinned media tool does not |
+| G15 | A parser without a fuzz target, a target the nightly does not run, or a panic in the mutation pass |
+| G16 | A catalogue string that contains a forbidden word as a whole word, in any language on disk |
+| G17 | A time without a clock from the closed set, or a time sentence that does not say "no later than" |
+| G18 | A comparison that reports more, or less, than the one subject a flipped byte belongs to |
+| G19 | A structural inspection that reads 256 kibibytes or more, or touches the media data |
+| G20 | A probe the roadmap and the evidence register disagree about, or a register whose shape has drifted |
+| G52 | A count, a table or a documented gate step that no longer matches the repository |
+| G54 | A tracked file the ignore file says never enters the repository, or a tracked file larger than source ever is |
 
-The identifiers are stable, so the enforced set is not a contiguous range. The last two arrived earlier than
-the plan scheduled them: the evidence register was worth reading as data from the first day, and the table
-reconciliation caught a wrong number in this README on the day it was written.
+The identifiers are stable, so the enforced set is not a contiguous range. Two arrived earlier than the plan
+scheduled them: the evidence register was worth reading as data from the first day, and a count in a
+document is wrong the moment nobody checks it. One was not in the plan: the platform cannot refuse a
+recording or a key at the door for a repository owned by a person, so the suite does.
 
 ### Committed, with the milestone that will enforce each
 
-Thirty-nine further guarantees are written down against the milestone that will enforce them, from the
-byte-for-byte round trip at M1 to the masking gate at M6.
+Thirty-two further guarantees are written down against the milestone that will enforce them, from the
+lossless extraction at M2 to the production signer chain at M9.
 [`docs/guarantees.md`](docs/guarantees.md) is the whole ledger.
 
 ## Evidence
 
 Every load-bearing assumption in this project is a **probe**: a question, the method that answers it, and the
-decision it settles. There are 36 of them, and none is answered yet, which the register says in the only four
+decision it settles. There are 39 of them, and the register says what is known about each in the only four
 words it admits: `measured`, `reasoned`, `unavailable`, `not started`. The last two are never read as a pass.
 
 ```console
@@ -153,8 +169,18 @@ $ cargo run -p adiungere-cli -- probes check
 ```console
 $ git clone https://github.com/LennyObez/adiungere
 $ cd adiungere/core
-$ cargo test --workspace
+$ cargo build --release -p adiungere-cli
+$ ./target/release/adiungere inspect clip.mp4
+$ ./target/release/adiungere fingerprint clip.mp4 --manifest clip.manifest.json
+$ ./target/release/adiungere verify clip.manifest.json clip.mp4
+$ ./target/release/adiungere detect /media/card/
 ```
+
+`inspect` reads the headers and never the media; `fingerprint` reads every byte and writes the manifest;
+`verify` compares a manifest with a file, subject by subject; `detect` finds recordings in files and
+directories and pairs the files of recorders that write one per camera; `report` renders a manifest with
+the commands that reproduce each number. Every command prints prose for a person or, with
+`--format json`, one document for a pipeline, and none of them returns a verdict about a recording.
 
 [`docs/getting-started.md`](docs/getting-started.md) has the tools, the gate sequence and where things are.
 
@@ -163,6 +189,7 @@ $ cargo test --workspace
 - [`docs/roadmap.md`](docs/roadmap.md), eleven milestones, each with a named demonstration
 - [`docs/architecture.md`](docs/architecture.md), what owns what and why the boundary sits there
 - [`docs/testing.md`](docs/testing.md), the method, the gates and how a guarantee is written
+- [`docs/integrity.md`](docs/integrity.md), what is proved, how each number is defined, how to reproduce it
 - [`docs/evidence.md`](docs/evidence.md), the probe register
 - [`docs/guarantees.md`](docs/guarantees.md), every guarantee and the milestone that enforces it
 - [`docs/adr/`](docs/adr/README.md), the decisions, each with the check that makes it hold

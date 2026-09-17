@@ -18,6 +18,19 @@ DerivedData/
 # Gate output: one file per step, written by scripts/gate.sh
 /.gate/
 
+# The pinned external tools, fetched by scripts/fetch-tools.sh from tools/versions.toml
+/.tools/
+
+# What the fuzzer writes: its evolving corpus and any crashing input. The seeds come from the fixture
+# builder at run time, and a crashing input is an artefact of a run, not a source.
+/core/fuzz/corpus/
+/core/fuzz/artifacts/
+/core/fuzz/coverage/
+
+# What mutation testing writes
+/core/mutants.out/
+/core/mutants.out.old/
+
 # Runtime and caches
 *.log
 .cache/
@@ -65,14 +78,8 @@ id_ed25519
 # Working notes: deliberately untracked, see CONTRIBUTING.md
 /.worklog/
 
-# Assistant configuration, which is a property of a working session rather than of the product.
-/CLAUDE.md
-/.claude/
-
-# Operating system and editor noise
+# Operating system noise. Editor and tool configuration is a property of a working environment rather than
+# of the product, and belongs in that environment's global excludes.
 .DS_Store
 Thumbs.db
-.idea/
-.vscode/*
-!.vscode/extensions.json
 *.swp

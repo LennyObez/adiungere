@@ -49,23 +49,26 @@ the platforms that can remux by themselves. Their writers would drop the vendor 
 
 | Crate | Responsibility | Milestone |
 |---|---|---|
-| `adiungere-isobmff` | Box tree as opaque ranges by default, sample iterator in decode order, remuxer, finalise step | M1, M2 |
-| `adiungere-fingerprint` | Track fingerprint, decoder configuration digest, secondary elementary-stream digest, file digest | M1 |
-| `adiungere-scan` | Naming grammars per brand, bounded metadata probe, paired-file sources, derivative detector | M1 |
-| `adiungere-manifest` | Manifest types, canonical serialisation, published schema, graded verification | M1 |
+| `adiungere-isobmff` | Box tree as opaque ranges by default, sample iterator in decode order, one sans-I/O reader behind a synchronous and an asynchronous driver; remuxer and finalise step | **present**; remuxer M2 |
+| `adiungere-fingerprint` | Track fingerprint, decoder configuration digest, secondary elementary-stream digest, file digest, structural fingerprint | **present** |
+| `adiungere-scan` | Naming grammars by shape, bounded metadata probe, paired-file sources, the signs of a rewrite, a probe cache | **present** |
+| `adiungere-manifest` | Manifest types, canonical serialisation, published schema, comparison as findings, the wording catalogue | **present** |
+| `adiungere-fixtures` | The synthetic corpus, built from three committed streams with no encoder | **present** |
 | `adiungere-provenance` | Content Credentials: ingredients, actions, integrity assertion, placement, time stamping | M3 |
 | `adiungere-telemetry` | Read-only, best-effort vendor telemetry parser that degrades to bytes preserved | M6 |
 | `adiungere-core` | The public API facade | M2 |
 | `adiungere-ffi` | Foreign function surface for Swift and Kotlin, with generated bindings committed | M7 |
 | `adiungere-wasm` | Browser surface with a segmented reader and writer | M4 |
-| `adiungere-cli` | The executable specification: inspect, fingerprint, detect, export, verify, report, probes | **present** |
+| `adiungere-cli` | The executable specification: inspect, fingerprint, detect, verify, report, probes; export at M2 | **present** |
 | `adiungere-relay` | The minimal signing and time-stamping service | M4 |
 | `adiungere-guarantees` | The repository guarantee suite | **present** |
 
 Two rules shape every one of them. **Boxes are byte ranges unless a value is needed**, because a typed
 container silently drops the children it does not recognise, and the children it does not recognise are
-exactly the vendor telemetry this product exists to preserve. **Nothing in the core can panic**, because it
-runs inside six host applications that must report a bad file rather than die on one.
+exactly the vendor telemetry this product exists to preserve. **The core does not panic by design**: the
+constructs that abort on purpose are denied outside tests, and arithmetic is checked so that an overflow is
+a defect that surfaces rather than a wrong offset that ships. It runs inside six host applications that must
+report a bad file rather than die on one.
 
 ## What the product proves
 
@@ -80,13 +83,13 @@ runs inside six host applications that must report a bad file rather than die on
 | What is shown actually happened | **No** | Beyond the reach of any tool |
 
 Four export classes carry that distinction permanently: an **extraction** copies samples byte for byte into a
-rebuilt container; a **two-track archive** carries both cameras with no encoder; a **verified lossless
-rendition** earns its label only after decoded frames are compared; a **rendition** is re-encoded and says
-so. The integrity label shown to a person derives from that classification and from nothing else.
+rebuilt container; a **two-track archive** carries both cameras with no encoder; a **pixel-exact rendition**
+earns its label only after every decoded frame has been compared; a **rendition** is re-encoded and says so.
+The integrity label shown to a person derives from that classification and from nothing else.
 
 The wording is a controlled vocabulary held in a catalogue and enforced by a test, so no surface can promote
 a fact into a verdict. The specification of the fingerprint and the manifest, with a reference implementation
-short enough to read in one sitting, is published in `docs/integrity.md` at M1.
+short enough to read in one sitting, is published in [`docs/integrity.md`](integrity.md).
 
 ## Trust boundaries
 

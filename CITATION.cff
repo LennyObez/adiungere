@@ -1,7 +1,8 @@
 # Citation File Format 1.2.0, https://citation-file-format.github.io
 #
-# Update `version` and `date-released` at every tagged release. Guarantee G08 checks that the licence named
-# here agrees with the licence file and the workspace manifest.
+# No version and no release date are stated until the first tagged release exists: a version that nothing
+# was released under is a claim, and the signed commit identifies the work until then. Guarantee G08 checks
+# that the licence named here agrees with the licence file and the workspace manifest.
 
 cff-version: 1.2.0
 title: adiungere
@@ -23,11 +24,7 @@ authors:
     given-names: Lenny
     website: https://github.com/LennyObez
 
-version: 0.0.0
-date-released: '2026-09-09'
-
 license: Apache-2.0
-license-url: https://www.apache.org/licenses/LICENSE-2.0.txt
 
 repository-code: https://github.com/LennyObez/adiungere
 url: https://adiungere.com

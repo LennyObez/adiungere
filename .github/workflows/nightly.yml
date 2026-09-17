@@ -1,0 +1,146 @@
+name: Nightly
+
+# The checks that take longer than a pull request can wait for, or need a compiler the product is not built
+# with. Each job is its own answer: a red fuzz job says a parser panics, a red mutation job says a test
+# would not notice a change, a red reference job says the product no longer reproduces the recording it is
+# built around. Nothing here is a required check; everything here is read the next morning.
+#
+# The dated nightly channel and the external tool versions come from tools/versions.toml through the
+# scripts, never from this file, so that the one place a version is written stays the one place.
+
+on:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - box_reader
+          - sample_tables
+          - fingerprints
+          - manifest_reader
+          - naming_grammars
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the dated nightly
+        run: scripts/nightly.sh install
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            core
+            core/fuzz
+
+      - name: Write the seeds
+        run: scripts/nightly.sh seeds "$RUNNER_TEMP/seeds"
+
+      - name: Fuzz for forty minutes
+        env:
+          TARGET: ${{ matrix.target }}
+        run: scripts/nightly.sh fuzz "$TARGET" "$RUNNER_TEMP/seeds" 2400
+
+      - name: Keep any crashing input
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: core/fuzz/artifacts
+          if-no-files-found: ignore
+
+  miri:
+    name: Undefined behaviour
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the dated nightly
+        run: scripts/nightly.sh install
+
+      - name: Run the unit tests under the interpreter
+        run: scripts/nightly.sh miri
+
+  mutants:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the pinned toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      - name: Mutate the reader, the fingerprints, the manifest and the scanner
+        run: scripts/nightly.sh mutants
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutants
+          path: core/mutants.out
+          if-no-files-found: ignore
+
+  reference:
+    name: Reference recording
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve the pinned toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: core
+
+      # The recording is private: it carries satellite positions. It is fetched from a location only this
+      # repository's secrets know, checked against the digest pinned in core/fixtures/reference.toml, and
+      # never kept. A missing secret is a red job, not a skipped one.
+      - name: Fetch and check the reference recording
+        env:
+          REFERENCE_CLIP_URL: ${{ secrets.REFERENCE_CLIP_URL }}
+        run: scripts/reference-clip.sh fetch "$RUNNER_TEMP/reference.mp4"
+
+      - name: Reproduce every pinned number
+        run: scripts/reference-clip.sh check "$RUNNER_TEMP/reference.mp4"
+
+      - name: Forget the recording
+        if: always()
+        run: rm -f "$RUNNER_TEMP/reference.mp4"
