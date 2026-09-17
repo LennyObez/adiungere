@@ -18,7 +18,17 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 # An ignored advisory is a decision, not a convenience. Each entry carries the reason and the date it was
 # taken, and is revisited when the dependency moves.
-ignore = []
+ignore = [
+    # The RSA crate's private-key operations leak timing. It reaches this graph only through the provenance
+    # library's pure-Rust cryptography, where it verifies RSA signatures made by others; no RSA private key
+    # is ever used by this product, because the credential type refuses RSA algorithms while this stands.
+    # No fixed release exists (checked 2026-09-17); revisited when one does.
+    { id = "RUSTSEC-2023-0071", reason = "verification only; RSA signing is refused by adiungere-provenance until the crate is fixed" },
+    # A procedural macro reached through the provenance library's IRI crates. It runs when the code is
+    # compiled and links nothing into the product. Revisited at each update of the provenance library
+    # (decided 2026-09-17).
+    { id = "RUSTSEC-2024-0370", reason = "build-time macro, nothing of it ships; carried by the provenance library" },
+]
 
 [licenses]
 confidence-threshold = 0.93
@@ -40,6 +50,9 @@ allow = [
     # The University of Illinois/NCSA licence: permissive, attribution only, the terms of the fuzzing engine
     # the fuzzing project links. That project is checked with this same file.
     "NCSA",
+    # The Community Data License Agreement, permissive: the terms of the root certificate store the
+    # time-stamp request's HTTP client carries, which is data rather than code.
+    "CDLA-Permissive-2.0",
 ]
 # No exception. An exception here would be a crate whose licence the policy refuses, kept anyway.
 exceptions = []
@@ -55,7 +68,10 @@ highlight = "all"
 allow = []
 deny = []
 skip = []
-skip-tree = []
+# The provenance library's own graph carries two lines of several crates, which its authors and not this
+# project decide. The rule stays for everything else: a duplicate reached through any other path is
+# refused. Revisited at each update of the library (decided 2026-09-17).
+skip-tree = [{ crate = "c2pa", reason = "duplicates inside the provenance library's graph are its authors' to resolve" }]
 
 [sources]
 unknown-registry = "deny"
