@@ -768,7 +768,8 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   the product writes is one the applications people already have will play. A refusal or a silent first
   frame on either platform is a defect of the writer, to be reproduced on the synthetic corpus before it is
   fixed.
-- **Result:** measured on 2026-09-17 on Windows; the phone half is recorded below as it is measured.
+- **Result:** measured on 2026-09-17 on Windows and on an iPhone; an Android gallery follows when a device
+  is at hand.
 
   The rear-only export of the reference recording, 60 591 108 bytes, two tracks, was written in twelve
   seconds by the release command line and opened where it was written, on the machine that holds the
@@ -777,10 +778,12 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
   rear camera, which the same application does not show for the recording itself. The front-only export,
   75 581 452 bytes, was written the same way for a side-by-side comparison with the recording.
 
-  The phone half: an Android device was not at hand on the day; an iPhone reading the file from the
-  photo library is the next measurement, and an Android gallery follows when a device is available. Until
-  one phone has played the file, the milestone's demonstration is half done and its roadmap line stays
-  open.
+  The phone half, the same day: an iPhone 15 Pro Max on iOS 27, the file reaching it through the cloud
+  photo library and opened in the Photos application, played in full and showed the rear camera. That
+  route passes through the photo library's own storage, which may hand the player a derivative rather than
+  the export's bytes (P13 measures what the library does to an import); so this half says that the export
+  is accepted and played, and says nothing about which bytes the phone decoded. An Android device was not
+  at hand on the day, and its gallery is measured when one is.
 
   ```console
   $ adiungere export <recording> --camera rear --out rear.mp4
