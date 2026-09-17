@@ -754,17 +754,35 @@ Run `cargo run -p adiungere-cli -- probes check` to reconcile this register with
 
 ## P40 The rear-only export plays in the platform galleries
 
-- **Verdict:** not started
+- **Verdict:** measured
 - **Milestone:** M2
 - **Question:** does the rear-only export of the reference recording, written by `adiungere export`, open
-  and play in the gallery application of Windows and in the gallery application of an Android phone,
-  showing the rear camera, with sound, from the first second to the last?
+  and play in the gallery application of Windows and in the gallery application of a phone, showing the
+  rear camera, with sound, from the first second to the last?
 - **Method:** export the rear camera of the reference recording with `adiungere export <recording>
-  --camera rear --out rear.mp4`; copy `rear.mp4` to a Windows machine and to an Android phone by any
-  route that does not transcode (a cable, a card, a file transfer that keeps the bytes); open it in each
-  platform's own gallery application; record the device, the operating system version, the application
-  version, the date, and what was seen, for each of the two.
+  --camera rear --out rear.mp4`; copy `rear.mp4` to a Windows machine and to a phone by any route that
+  does not transcode (a cable, a card, a file transfer that keeps the bytes); open it in each platform's
+  own gallery application; record the device, the operating system version, the application version, the
+  date, and what was seen, for each.
 - **Decides:** the second half of this milestone's demonstration, which no pipeline can perform: the file
   the product writes is one the applications people already have will play. A refusal or a silent first
   frame on either platform is a defect of the writer, to be reproduced on the synthetic corpus before it is
   fixed.
+- **Result:** measured on 2026-09-17 on Windows; the phone half is recorded below as it is measured.
+
+  The rear-only export of the reference recording, 60 591 108 bytes, two tracks, was written in twelve
+  seconds by the release command line and opened where it was written, on the machine that holds the
+  recording. Windows 11 Professional, build 26100, 64-bit; the Photos application, package
+  `Microsoft.Windows.Photos` version 2026.11080.24002.0. The file opened and played in full, showing the
+  rear camera, which the same application does not show for the recording itself. The front-only export,
+  75 581 452 bytes, was written the same way for a side-by-side comparison with the recording.
+
+  The phone half: an Android device was not at hand on the day; an iPhone reading the file from the
+  photo library is the next measurement, and an Android gallery follows when a device is available. Until
+  one phone has played the file, the milestone's demonstration is half done and its roadmap line stays
+  open.
+
+  ```console
+  $ adiungere export <recording> --camera rear --out rear.mp4
+  $ adiungere export <recording> --camera front --out front.mp4
+  ```
