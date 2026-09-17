@@ -16,6 +16,10 @@ publish.workspace = true
 name = "adiungere_guarantees"
 path = "src/lib.rs"
 
+# The validator's answer is read as one JSON document.
+[dependencies]
+serde_json = { workspace = true }
+
 # The guarantees ask the product's own crates to read the evidence register, the roadmap and the synthetic
 # recordings, rather than reimplementing any of them. A second implementation would agree with the first
 # until the day it mattered.
@@ -25,8 +29,8 @@ adiungere-fingerprint = { path = "../adiungere-fingerprint" }
 adiungere-fixtures = { path = "../adiungere-fixtures" }
 adiungere-isobmff = { path = "../adiungere-isobmff" }
 adiungere-manifest = { path = "../adiungere-manifest" }
+adiungere-provenance = { path = "../adiungere-provenance" }
 adiungere-scan = { path = "../adiungere-scan" }
-serde_json = { workspace = true }
 # The licence text is compared by digest against its canonical publication, not by a handful of markers a
 # one-word edit would leave intact.
 sha2 = { workspace = true }

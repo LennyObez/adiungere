@@ -40,39 +40,50 @@ platform() {
     esac
 }
 
-fetch_ffmpeg() {
-    table="ffmpeg.$(platform)"
+# Fetches one tool: its table in the versions file names the version, and the platform sub-table the
+# archive, its digest and the binary inside it. The archive's compression is read from its name.
+fetch_tool() {
+    name=$1
+    what=$2
+    version_flag=$3
+    table="$name.$(platform)"
     url=$(value_of "$table" url)
     digest=$(value_of "$table" sha256)
     binary=$(value_of "$table" binary)
-    version=$(value_of ffmpeg version)
+    version=$(value_of "$name" version)
 
     if [ -z "$url" ] || [ -z "$digest" ] || [ -z "$binary" ] || [ -z "$version" ]; then
-        printf 'fetch-tools: tools/versions.toml does not describe the media tool for this platform\n' >&2
+        printf 'fetch-tools: tools/versions.toml does not describe the %s for this platform\n' "$what" >&2
         exit 1
     fi
 
     mkdir -p "$tools"
-    archive="$tools/ffmpeg-$version.tar.xz"
+    case "$url" in
+        *.tar.xz) archive="$tools/$name-$version.tar.xz" ;;
+        *.tar.gz) archive="$tools/$name-$version.tar.gz" ;;
+        *)
+            printf 'fetch-tools: the archive of the %s is neither .tar.xz nor .tar.gz\n' "$what" >&2
+            exit 1
+            ;;
+    esac
     # What an install records about itself: the archive digest it came from and the digest of the binary it
     # left. A later run trusts the install only if both still match, so a pin that moved or a binary that
     # changed under the same name is fetched again rather than accepted.
-    record="$tools/ffmpeg-$version.installed"
+    record="$tools/$name-$version.installed"
 
     if [ -x "$tools/$binary" ] && [ -f "$record" ]; then
         recorded_archive=$(sed -n 1p "$record")
         recorded_binary=$(sed -n 2p "$record")
         current_binary=$(sha256sum "$tools/$binary" | cut -c1-64)
         if [ "$recorded_archive" = "$digest" ] && [ "$recorded_binary" = "$current_binary" ]; then
-            printf 'fetch-tools: the media tool is already present at %s and matches its pin\n' \
-                "$tools/$binary"
+            printf 'fetch-tools: the %s is already present at %s and matches its pin\n' "$what" "$tools/$binary"
             return 0
         fi
         printf 'fetch-tools: the install at %s no longer matches its pin; fetching again\n' "$tools/$binary"
     fi
     rm -rf "${tools:?}/${binary%%/*}" "$record"
 
-    printf 'fetch-tools: fetching the media tool %s\n' "$version"
+    printf 'fetch-tools: fetching the %s %s\n' "$what" "$version"
     curl --fail --silent --show-error --location --output "$archive" "$url"
 
     observed=$(sha256sum "$archive" | cut -c1-64)
@@ -83,7 +94,10 @@ fetch_ffmpeg() {
         exit 1
     fi
 
-    tar -xJf "$archive" -C "$tools"
+    case "$archive" in
+        *.tar.xz) tar -xJf "$archive" -C "$tools" ;;
+        *) tar -xzf "$archive" -C "$tools" ;;
+    esac
     rm -f "$archive"
 
     if [ ! -x "$tools/$binary" ]; then
@@ -92,7 +106,8 @@ fetch_ffmpeg() {
     fi
     printf '%s\n%s\n' "$digest" "$(sha256sum "$tools/$binary" | cut -c1-64)" > "$record"
 
-    printf 'fetch-tools: %s\n' "$("$tools/$binary" -version | head -n 1)"
+    printf 'fetch-tools: %s\n' "$("$tools/$binary" "$version_flag" | head -n 1)"
 }
 
-fetch_ffmpeg
+fetch_tool ffmpeg 'media tool' -version
+fetch_tool c2patool 'credentials validator' --version

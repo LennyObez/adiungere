@@ -128,3 +128,5 @@ first day precisely so that it is exercised rather than theoretical.
 - [`docs/evidence.md`](../evidence.md), probes P04, P05, P11, P12, P17 and P25
 - [ADR-0005](0005-the-product-never-returns-a-verdict.md),
   [ADR-0008](0008-the-website-runs-in-the-browser.md)
+- [ADR-0015](0015-what-a-relayed-signature-proves.md), which refines the custody mechanism after P11 was
+  measured: the service signs the claim it audits rather than one it rebuilds

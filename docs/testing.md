@@ -65,7 +65,9 @@ success and teaches everyone to trust a green that means nothing.
 | Independent parser oracle over an extraction's sample tables: the pinned media tool counts the packets of every export and decodes every one of them | **present** |
 | Fuzzing of the box reader, the sample tables, the fingerprints, the manifest reader and the naming grammars, nightly on a dated compiler, seeded from the corpus | **present** |
 | Mutation testing and undefined-behaviour checking, nightly | **present** |
-| Reproduction of every pinned number on the private reference recording, nightly | **present**, red until the recording's location is configured as a secret |
+| Reproduction of every pinned number on the private reference recording, nightly | **present** |
+| Independent validator over what the product signs: an export signed last, a recording with credentials beside it, a rewrite after signing refused, the three documents agreeing on every digest and action | **present** |
+| The public time-stamping authority asked for a token and for a signature with a time stamp inside, nightly, the one suite that reaches the network | **present** |
 | Byte-identical output across operating systems: the pinned digests run on Linux, macOS on both architectures and Windows | **present** |
 | Byte-identical output from WebAssembly | M4 |
 | No encoder in the release command line: the resolved graph names none, and the binary's symbols carry none | **present** |
@@ -138,7 +140,7 @@ first red.
 | 11 | Advisories, licences, sources and bans | `cargo deny check` |
 | 12 | The same policy over the fuzzing project | `cargo deny --manifest-path core/fuzz/Cargo.toml --config core/deny.toml check` |
 | 13 | No encoder symbol in the release command line | `scripts/check-encoder-symbols.sh`: the fixture refused first, then the release binary read with the toolchain's symbol reader |
-| 14 | Mutation testing, fuzzing, undefined-behaviour checking | nightly pipeline, through scripts/nightly.sh |
+| 14 | Mutation testing, fuzzing, undefined-behaviour checking, the time-stamping authority | nightly pipeline, through scripts/nightly.sh |
 | 15 | Cross-platform and WebAssembly build matrix | pull-request pipeline, the four matrix jobs of the core workflow |
 | 16 | The browser and Apple readers agree with the fingerprint | oracles pipeline, through scripts/oracles.sh |
 

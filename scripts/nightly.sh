@@ -9,7 +9,8 @@
 #     scripts/nightly.sh seeds DIR          write the synthetic corpus into DIR as fuzzing seeds
 #     scripts/nightly.sh fuzz TARGET DIR S  run one fuzz target for S seconds, seeded from DIR
 #     scripts/nightly.sh miri               run the unit tests of the four library crates under Miri
-#     scripts/nightly.sh mutants            run mutation testing on the four library crates
+#     scripts/nightly.sh mutants            run mutation testing on the five library crates
+#     scripts/nightly.sh authority          ask the public time-stamping authority, the one network test
 
 set -eu
 
@@ -81,10 +82,17 @@ case "${1:-}" in
         install_pinned cargo-mutants
         cd "$root/core"
         cargo mutants --package adiungere-isobmff --package adiungere-fingerprint --package adiungere-manifest \
-            --package adiungere-scan --timeout 300 --jobs 2
+            --package adiungere-scan --package adiungere-provenance --timeout 300 --jobs 2
+        ;;
+    authority)
+        # The one suite that reaches the network: a public time-stamping authority is asked for a token,
+        # and a signing is made with a time stamp inside it. No pull-request check does this; here an
+        # authority that does not answer is a red job, never a skipped test.
+        cd "$root/core"
+        cargo test -p adiungere-provenance --test authority -- --ignored
         ;;
     *)
-        printf 'usage: scripts/nightly.sh install | seeds DIR | fuzz TARGET DIR SECONDS | miri | mutants\n' >&2
+        printf 'usage: scripts/nightly.sh install | seeds DIR | fuzz TARGET DIR SECONDS | miri | mutants | authority\n' >&2
         exit 2
         ;;
 esac

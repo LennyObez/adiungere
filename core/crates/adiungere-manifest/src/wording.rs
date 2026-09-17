@@ -120,6 +120,8 @@ pub enum Phrase {
     TimeDisagreement,
     /// A track fingerprint line.
     FingerprintTrack,
+    /// A decoder configuration digest line.
+    FingerprintConfiguration,
     /// An elementary stream digest line.
     FingerprintStream,
     /// A whole-file digest line.
@@ -152,15 +154,59 @@ pub enum Phrase {
     ExportPreservedNone,
     /// An export left out track references to tracks it does not hold.
     ExportReferencesDropped,
+    /// An export left out the source's manifest store.
+    ExportCredentialsLeftOut,
     /// Where the export's manifest was written.
     ExportManifest,
     /// What an export shows of people and places, said after every export.
     ExportFaces,
+    /// A manifest was embedded and signed.
+    SignEmbedded,
+    /// A manifest was written beside the file and signed.
+    SignSidecar,
+    /// The credential was generated for the run.
+    SignEphemeral,
+    /// A time stamp is inside the signature.
+    SignTime,
+    /// No authority was asked.
+    SignTimeNone,
+    /// Credentials found embedded.
+    CredentialsEmbedded,
+    /// Credentials found beside the file.
+    CredentialsSidecar,
+    /// No credentials anywhere.
+    CredentialsNone,
+    /// The chain leads to the trust list.
+    CredentialsOnList,
+    /// The chain leads to no trust list.
+    CredentialsNotOnList,
+    /// The signature or the binding does not hold.
+    CredentialsInvalid,
+    /// The authority's time.
+    CredentialsTime,
+    /// No time stamp in the signature.
+    CredentialsTimeNone,
+    /// The actions recorded.
+    CredentialsActions,
+    /// The sources named.
+    CredentialsSources,
+    /// The signed facts match the file.
+    CredentialsFactsMatch,
+    /// The signed facts do not match the file.
+    CredentialsFactsDiffer,
+    /// The signed facts are not readable.
+    CredentialsFactsNone,
+    /// A token was written.
+    StampWritten,
+    /// A token names the manifest.
+    StampToken,
+    /// A token does not name the manifest.
+    StampTokenMismatch,
 }
 
 impl Phrase {
     /// Every phrase, so that the catalogue can be checked against the code in both directions.
-    pub const ALL: [Self; 58] = [
+    pub const ALL: [Self; 81] = [
         Self::FactsOnly,
         Self::NotAnExamination,
         Self::MoovFirst,
@@ -201,6 +247,7 @@ impl Phrase {
         Self::SystemClockNote,
         Self::TimeDisagreement,
         Self::FingerprintTrack,
+        Self::FingerprintConfiguration,
         Self::FingerprintStream,
         Self::FingerprintFile,
         Self::FingerprintStructure,
@@ -217,8 +264,30 @@ impl Phrase {
         Self::ExportPreserved,
         Self::ExportPreservedNone,
         Self::ExportReferencesDropped,
+        Self::ExportCredentialsLeftOut,
         Self::ExportManifest,
         Self::ExportFaces,
+        Self::SignEmbedded,
+        Self::SignSidecar,
+        Self::SignEphemeral,
+        Self::SignTime,
+        Self::SignTimeNone,
+        Self::CredentialsEmbedded,
+        Self::CredentialsSidecar,
+        Self::CredentialsNone,
+        Self::CredentialsOnList,
+        Self::CredentialsNotOnList,
+        Self::CredentialsInvalid,
+        Self::CredentialsTime,
+        Self::CredentialsTimeNone,
+        Self::CredentialsActions,
+        Self::CredentialsSources,
+        Self::CredentialsFactsMatch,
+        Self::CredentialsFactsDiffer,
+        Self::CredentialsFactsNone,
+        Self::StampWritten,
+        Self::StampToken,
+        Self::StampTokenMismatch,
     ];
 
     /// The catalogue key.
@@ -265,6 +334,7 @@ impl Phrase {
             Self::SystemClockNote => "time.system.clock.note",
             Self::TimeDisagreement => "time.disagreement",
             Self::FingerprintTrack => "fingerprint.track",
+            Self::FingerprintConfiguration => "fingerprint.configuration",
             Self::FingerprintStream => "fingerprint.stream",
             Self::FingerprintFile => "fingerprint.file",
             Self::FingerprintStructure => "fingerprint.structure",
@@ -281,8 +351,30 @@ impl Phrase {
             Self::ExportPreserved => "export.preserved",
             Self::ExportPreservedNone => "export.preserved.none",
             Self::ExportReferencesDropped => "export.references.dropped",
+            Self::ExportCredentialsLeftOut => "export.credentials.left.out",
             Self::ExportManifest => "export.manifest",
             Self::ExportFaces => "export.faces",
+            Self::SignEmbedded => "sign.embedded",
+            Self::SignSidecar => "sign.sidecar",
+            Self::SignEphemeral => "sign.ephemeral",
+            Self::SignTime => "sign.time",
+            Self::SignTimeNone => "sign.time.none",
+            Self::CredentialsEmbedded => "credentials.embedded",
+            Self::CredentialsSidecar => "credentials.sidecar",
+            Self::CredentialsNone => "credentials.none",
+            Self::CredentialsOnList => "credentials.state.on.list",
+            Self::CredentialsNotOnList => "credentials.state.not.on.list",
+            Self::CredentialsInvalid => "credentials.state.invalid",
+            Self::CredentialsTime => "credentials.time",
+            Self::CredentialsTimeNone => "credentials.time.none",
+            Self::CredentialsActions => "credentials.actions",
+            Self::CredentialsSources => "credentials.sources",
+            Self::CredentialsFactsMatch => "credentials.facts.match",
+            Self::CredentialsFactsDiffer => "credentials.facts.differ",
+            Self::CredentialsFactsNone => "credentials.facts.none",
+            Self::StampWritten => "stamp.written",
+            Self::StampToken => "stamp.token",
+            Self::StampTokenMismatch => "stamp.token.mismatch",
         }
     }
 }

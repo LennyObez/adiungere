@@ -195,8 +195,8 @@ fn a_register_that_disagrees_with_the_roadmap_exits_with_a_no() {
 
 #[test]
 fn showing_one_probe_prints_its_question_and_says_what_is_not_recorded() {
-    // Act
-    let output = run(&["probes", "show", "P11"]).unwrap();
+    // Act: a probe that needs a device this repository's pipeline does not have, so it stays unanswered.
+    let output = run(&["probes", "show", "P06"]).unwrap();
     let printed = out(&output);
 
     // Assert
@@ -206,7 +206,7 @@ fn showing_one_probe_prints_its_question_and_says_what_is_not_recorded() {
         output.status.code(),
         err(&output)
     );
-    assert!(printed.contains("P11"), "got {printed}");
+    assert!(printed.contains("P06"), "got {printed}");
     assert!(printed.contains("Question"), "got {printed}");
     assert!(
         printed.contains("not evidence of anything"),
@@ -217,8 +217,9 @@ fn showing_one_probe_prints_its_question_and_says_what_is_not_recorded() {
 #[test]
 fn the_machine_readable_form_is_valid_json() {
     // Act
-    // A probe that is not started, so that the absent result shows as an explicit null.
-    let output = run(&["probes", "show", "P04", "--format", "json"]).unwrap();
+    // A probe that is not started, so that the absent result shows as an explicit null: one that needs a
+    // device this repository's pipeline does not have.
+    let output = run(&["probes", "show", "P06", "--format", "json"]).unwrap();
     let printed = out(&output);
 
     // Assert
@@ -230,7 +231,7 @@ fn the_machine_readable_form_is_valid_json() {
     );
 
     let parsed: serde_json::Value = serde_json::from_str(&printed).expect("the output must parse as JSON");
-    assert_eq!(parsed.get("id").and_then(serde_json::Value::as_str), Some("P04"));
+    assert_eq!(parsed.get("id").and_then(serde_json::Value::as_str), Some("P06"));
     assert_eq!(parsed.get("result"), Some(&serde_json::Value::Null));
 }
 

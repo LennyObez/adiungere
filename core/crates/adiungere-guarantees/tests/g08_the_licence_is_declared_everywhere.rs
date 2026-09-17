@@ -28,13 +28,14 @@ const CANONICAL_DIGEST: &str = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3
 
 /// The licences this project accepts in its dependency graph. Permissive, or copyleft limited to the file
 /// it covers; nothing that reaches the work as a whole.
-const ACCEPTED: [&str; 12] = [
+const ACCEPTED: [&str; 13] = [
     "0BSD",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "CC0-1.0",
+    "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
     "MPL-2.0",

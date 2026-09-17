@@ -11,7 +11,8 @@ every one of them with ordinary tools and none of this code.
 | This file is the one that was seen when the manifest was made, to the byte | Yes | the SHA-256 of the whole file, reproducible with any digest utility |
 | The vendor boxes of this file are the bytes the manifest records | Yes | the SHA-256 of each vendor box, header included |
 | This file was written by the same kind of recorder, laid out the same way | Yes, as a shape | the structural fingerprint, with its observations listed beside it |
-| This file existed no later than a stated instant | Later milestone | a time stamp from an authority, which M3 adds; until then every time is a clock's claim with the clock named |
+| This file existed no later than a stated instant | Yes, as the authority's word | a time-stamp token from an authority, inside a signature or beside a manifest; its standing is the authority's, and every other time is a clock's claim with the clock named |
+| These facts were put under this name at that instant, and the file has not changed since | Yes, as the validator states it | Content Credentials, embedded or beside the file, read back in one of three states and never a fourth |
 | The recording was not altered before it was seen | **No** | nothing in a file attests to that; the product reports the signs of a rewrite and says it is not an authentication examination |
 | What the pictures show happened | **No** | outside the reach of any tool |
 
@@ -125,7 +126,9 @@ it equal to the one the types derive. Unknown fields are refused on reading, so 
 version is refused rather than half-read.
 
 The canonical text form is what `adiungere fingerprint --format json` prints: two-space indentation, the
-fields in the order the schema lists them, digests in lower-case hexadecimal, a trailing newline.
+fields in the order the types declare them, digests in lower-case hexadecimal, a trailing newline. The
+schema file itself is written with every object's keys sorted, so that it reads the same whatever
+produced it.
 
 Two fields describe what a general-purpose reader would have hidden. A vendor box carries `standard`: true
 when its type is one the base media file format or its 3GPP extension defines under the user-data box,
@@ -186,6 +189,54 @@ A whole file that differs while every track is identical is a container rewritte
 samples. A track that differs is a sample that changed. A vendor box that is missing is what every
 general-purpose rewrite does to a recording. Guarantee **G18** holds that one flipped byte produces exactly
 the finding it belongs to.
+
+## Content Credentials
+
+A manifest says what was seen; a signature says who says so and when. The product signs with the open
+provenance standard's manifest format, so that the validators people already have read what it writes.
+
+**What is signed.** The whole adiungere manifest of the file, carried verbatim as the assertion labelled
+`com.adiungere.integrity`; the recordings the file was made from as ingredients, the parent first, so that
+a chain of custody reads back from the export to the recording; and the actions, in the standard's
+vocabulary and from the export class alone: `c2pa.opened` over the ingredients, then `c2pa.repackaged`
+for an extraction or a two-track archive, `c2pa.transcoded` for a rendition, nothing more for a recording
+signed as it is.
+
+**Where it goes.** An output of the product carries its credentials **embedded**, in the box the standard
+reserves, with the hard binding over the rest of the file; signing is the last step, after every byte of
+the output is final, and the manifest written beside the output describes the signed file. A recording is
+never touched, so its credentials go **beside** it, under its stem with the `c2pa` extension, where the
+validators look without being told. An export of a signed file leaves the source's store out and says so,
+because a store is bound to the bytes of the file it was written into and would not hold in another;
+the export is signed anew, with the signed file as its parent.
+
+**What a rewrite does.** Any change to the bytes of a signed file after signing, including one that only
+moves a box, breaks the binding, and the validator reports `assertion.bmffHash.mismatch`. That is not a
+weakness to work around; it is the property. Guarantee **G27** watches it happen and watches re-signing
+restore it.
+
+**The three states.** Reading credentials back gives one of three states, and every surface shows the one
+the validator found and never a fourth: the signature and the binding hold and the signer's chain leads
+to the standard's trust list; they hold and the chain leads to no trust list, which is what a credential
+generated for the run and a certificate from an unlisted authority both give, shown by every validator as
+an unknown signer; or something does not hold, with the codes that say what. Guarantee **G30** holds each
+surface to the validator's finding.
+
+**The time.** When a time-stamping authority is configured, its token rides inside the signature and the
+validator reports the time it attested; the product says the signature existed no later than that instant
+by the authority's clock, and nothing about the authority's standing, which depends on where the reader
+is. A token can also be obtained on its own, over a manifest or any other file, and checked on its own:
+`adiungere timestamp` and the `.tsr` file beside the manifest that `adiungere verify` reads. Neither route
+checks the authority's chain against a trust list, and the wording says so.
+
+**What the signature proves, and what it does not.** That the holder of the credential put their name to
+these facts at that time. Not that the facts describe what the camera saw, not that the recording was
+what it is before adiungere saw it, and, for a signature made through the signing service, not more than
+that the facts were presented to the service, which never had the media
+([ADR-0015](adr/0015-what-a-relayed-signature-proves.md)).
+
+A stranger reads the credentials with the standard's own validator, pinned in `tools/versions.toml` and
+fetched by `scripts/fetch-tools.sh`; the [verification guide](verification-guide.md) shows the commands.
 
 ## The wording
 

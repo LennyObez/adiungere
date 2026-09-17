@@ -12,6 +12,7 @@ What you need, how to build it, and how to run every gate the pipeline runs.
 | `shellcheck` | The scripts under `scripts/` are checked like any other source | Your package manager |
 | `python3` on the pinned line | Runs the reference fingerprint script, which the guarantee suite compares with the product | Your package manager; the line is in `tools/versions.toml` |
 | The pinned media tool | Its elementary stream output is what the secondary digest is defined against | `scripts/fetch-tools.sh`, which places it under `.tools/` after checking its digest |
+| The pinned credentials validator | The independent reader of what the product signs; four guarantees run it | the same script, the same way |
 
 Nothing else. There is no media framework to install and no system library to hunt down; the media tool
 is a developer oracle, fetched once and never linked. The gate script refuses to run when one of these is
@@ -57,6 +58,10 @@ $ target/release/adiungere export clip.mp4 --camera rear --out rear.mp4
 $ target/release/adiungere export clip.mp4 --camera both --out archive.mp4
 $ target/release/adiungere export front.mp4 rear.mp4 --out joined.mp4
 $ target/release/adiungere export clip.mp4 --tracks 1,2 --out chosen.mp4 --manifest chosen.json
+$ target/release/adiungere export clip.mp4 --camera rear --out rear.mp4 --sign --time-authority https://freetsa.org/tsr
+$ target/release/adiungere sign clip.mp4 --time-authority https://freetsa.org/tsr
+$ target/release/adiungere sign rear.mp4 --embed --source clip.mp4 --out rear.signed.mp4 --chain chain.pem --key key.pem
+$ target/release/adiungere timestamp rear.mp4.manifest.json --time-authority https://freetsa.org/tsr
 ```
 
 `inspect` reads the headers and the movie box and never the media, so it answers in milliseconds on any
@@ -70,6 +75,17 @@ and keeps it only when every track carries its source's fingerprint; the manifes
 and an interruption removes the partial file. With two recordings, the front camera and the audio of the
 first and the first video track of the second are joined into one two-track file; with `--camera` or
 `--tracks` and one recording, the named cameras or the named track indices are taken.
+
+`--sign` signs the export last, with the Content Credentials embedded in the final file. Without `--chain`
+and `--key`, a credential is generated for the run and is on no trust list, which the answer says; with
+them, the PEM chain and its key are used, for an ES256, ES384, ES512 or Ed25519 key. `--time-authority`
+names the authority to ask for a time stamp, which then rides inside the signature; the public development
+authority above is free and needs no account, and a production authority is a value to configure, not a
+decision this document takes. `sign` writes credentials beside a recording under its stem with the `c2pa`
+extension and never touches the recording; with `--embed`, it writes a signed copy of an export at `--out`,
+naming the recordings given as `--source` as its ingredients. `timestamp` asks the authority for a token
+over any file and writes it beside as `<file>.tsr`; `verify` reads the token beside a manifest, and the
+credentials a file carries, and says what it found.
 
 ## Read the evidence register
 

@@ -7,6 +7,7 @@ members = [
     "crates/adiungere-guarantees",
     "crates/adiungere-isobmff",
     "crates/adiungere-manifest",
+    "crates/adiungere-provenance",
     "crates/adiungere-scan",
 ]
 # The fuzzing project links a runtime the product does not ship and builds on a dated nightly; it is its
@@ -28,6 +29,9 @@ publish = false
 # Every version is exact. A caret range means a dependency can change between two builds of the same commit,
 # which is unacceptable in a product whose central claim is that the same input produces the same bytes.
 [workspace.dependencies]
+# The provenance library, with its cryptography in Rust rather than a system library, no HTTP client but
+# the small synchronous one the time-stamp request needs, and none of its optional media handling.
+c2pa = { version = "=0.90.22", default-features = false, features = ["rust_native_crypto", "http_ureq"] }
 clap = { version = "=4.6.6", features = ["derive"] }
 ctrlc = "=3.5.2"
 schemars = "=1.2.2"

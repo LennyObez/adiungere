@@ -379,6 +379,148 @@ fn reports_the_pinned_version(candidate: &Path) -> bool {
         .is_some_and(|first| first.contains(&version))
 }
 
+/// Whether a candidate validator sits where the versions file says the fetched one is, or on the path,
+/// and reports the pinned version.
+fn is_the_pinned_validator(candidate: &Path, tools: &Path) -> bool {
+    let Some(version) = pinned("c2patool", "version") else {
+        return false;
+    };
+    let Some(binary) = pinned("c2patool.linux-x86_64", "binary") else {
+        return false;
+    };
+    if candidate.starts_with(tools) && candidate != tools.join(binary) {
+        return false;
+    }
+    let Ok(output) = Command::new(candidate).arg("--version").output() else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .is_some_and(|first| first.contains(&version))
+}
+
+/// The pinned Content Credentials validator, from the fetched tools directory or the path, at the pinned
+/// version only, or the sentence to print when it is absent. It is the independent reader of what the
+/// product signs, and a guarantee that needs it fails on that sentence rather than skipping.
+///
+/// # Errors
+///
+/// Returns the sentence when no candidate reports the pinned version.
+pub fn pinned_validator() -> Result<PathBuf, String> {
+    let tools = repository_root().join(".tools");
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&tools)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.path().join("c2patool"))
+                .collect()
+        })
+        .unwrap_or_default();
+    candidates.push(PathBuf::from("c2patool"));
+
+    candidates
+        .into_iter()
+        .find(|candidate| is_the_pinned_validator(candidate, &tools))
+        .ok_or_else(|| {
+            "the credentials validator at the version pinned in tools/versions.toml was not found. Run \
+             scripts/fetch-tools.sh; a guarantee that skipped it would be a guarantee that proved nothing"
+                .to_owned()
+        })
+}
+
+/// What the pinned validator says about a file, as the JSON document it prints: the active manifest, the
+/// manifests, the validation state and the validation results.
+///
+/// # Errors
+///
+/// Returns the validator's error stream when it refuses, or the parse error when it prints something
+/// that is not one JSON document.
+pub fn validator_report(validator: &Path, file: &Path) -> Result<serde_json::Value, String> {
+    let output = Command::new(validator)
+        .arg(file)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+    }
+    serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())
+}
+
+/// The value at a path of keys inside a JSON document, or nothing when a key is absent.
+#[must_use]
+pub fn at<'a>(value: &'a serde_json::Value, path: &[&str]) -> Option<&'a serde_json::Value> {
+    path.iter().try_fold(value, |current, key| current.get(key))
+}
+
+/// The string at a path of keys, or an empty string.
+#[must_use]
+pub fn text_at(value: &serde_json::Value, path: &[&str]) -> String {
+    at(value, path)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// What the pinned validator found about a file, read out of its report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatorVerdict {
+    /// The validation state the validator names.
+    pub state: String,
+    /// The common name of the signer's certificate.
+    pub common_name: String,
+    /// The codes the validator reports as failures.
+    pub failures: Vec<String>,
+    /// The actions the active manifest records, in order.
+    pub actions: Vec<String>,
+    /// The data of the assertion the product writes its facts under, when the manifest carries it.
+    pub integrity: Option<serde_json::Value>,
+}
+
+/// Runs the pinned validator on a file and reads its verdict.
+///
+/// # Errors
+///
+/// Returns the validator's error stream when it refuses, or the reason the report could not be read.
+pub fn validator_verdict(validator: &Path, file: &Path) -> Result<ValidatorVerdict, String> {
+    let report = validator_report(validator, file)?;
+    let active = text_at(&report, &["active_manifest"]);
+    if active.is_empty() {
+        return Err("the validator's report names no active manifest".to_owned());
+    }
+    let manifest = at(&report, &["manifests", &active]).ok_or("the active manifest is not in the report")?;
+    let assertions = at(manifest, &["assertions"])
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let failures = at(&report, &["validation_results", "activeManifest", "failure"])
+        .and_then(serde_json::Value::as_array)
+        .map(|codes| codes.iter().map(|code| text_at(code, &["code"])).collect())
+        .unwrap_or_default();
+    let actions = assertions
+        .iter()
+        .filter(|assertion| text_at(assertion, &["label"]).starts_with("c2pa.actions"))
+        .flat_map(|assertion| {
+            at(assertion, &["data", "actions"])
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default()
+        })
+        .map(|action| text_at(&action, &["action"]))
+        .collect();
+    let integrity = assertions
+        .iter()
+        .find(|assertion| text_at(assertion, &["label"]) == "com.adiungere.integrity")
+        .and_then(|assertion| at(assertion, &["data"]).cloned());
+    Ok(ValidatorVerdict {
+        state: text_at(&report, &["validation_state"]),
+        common_name: text_at(manifest, &["signature_info", "common_name"]),
+        failures,
+        actions,
+        integrity,
+    })
+}
+
 /// Returns the text with every line comment and every line that is only a comment removed, for
 /// configuration files that use `#`.
 ///

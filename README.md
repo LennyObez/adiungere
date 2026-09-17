@@ -8,8 +8,11 @@ The name is Latin: to join, to attach to. Two views of one moment, joined rather
 
 **Status: early construction.** The command line inspects a recording, fingerprints every track, finds
 recordings in a library, exports either camera or both without re-encoding a sample and with the recorder's
-boxes carried across byte for byte, joins the two files of a recorder that writes one per camera, and
-compares a manifest with a file; nothing plays yet. What follows
+boxes carried across byte for byte, joins the two files of a recorder that writes one per camera, signs an
+export with Content Credentials embedded or a recording with credentials beside it, asks an authority for
+a time stamp, and compares a manifest and its credentials with a file; nothing plays yet, and every
+signature is made with a credential on no trust list until one from a listed authority is enrolled. What
+follows
 describes the product being built, and [Guarantees](#guarantees) separates the properties a test enforces
 today from those committed to, each against the milestone that will enforce it.
 [`docs/roadmap.md`](docs/roadmap.md) holds the plan.
@@ -63,9 +66,13 @@ says a recording is authentic, because nothing can
 | The original recording was not altered before adiungere saw it | **No** | Nothing attests for the camera |
 | What is shown actually happened | **No** | Beyond the reach of any tool |
 
-The first two lines and the fourth hold today: [`docs/integrity.md`](docs/integrity.md) defines the
-fingerprint, the file digest and the vendor box digests, and shows how a stranger reproduces each of them
-with a digest utility, a hundred-line reference script and the common media tool.
+The first four lines hold today: [`docs/integrity.md`](docs/integrity.md) defines the fingerprint, the
+file digest and the vendor box digests, and shows how a stranger reproduces each of them with a digest
+utility, a hundred-line reference script and the common media tool; a time-stamping authority's token can
+be obtained over a manifest or carried inside a signature, and it is presented as the authority's word
+with whatever standing that authority has. [`docs/verification-guide.md`](docs/verification-guide.md)
+says the same for the person who has to decide, with the forensic bodies' own sentences on what an
+authentication examination is and why this product performs none.
 
 Four export classes carry that distinction permanently: an **extraction** copies samples byte for byte into a
 rebuilt container; a **two-track archive** carries both cameras with no encoder; a **pixel-exact
@@ -144,6 +151,10 @@ reporting success.
 | G24 | A reading crate that opens a file for writing, or a command that changes a recording's bytes or modification time |
 | G25 | An encoder crate in the resolved graph, or an encoder symbol in the release command line |
 | G26 | A sign the detector declares that no corpus recording raises, a sign without its phrase, or an unplaced file described as clean |
+| G27 | A signed export the independent validator refuses, a rewrite after signing it accepts, or a re-signing it refuses |
+| G28 | A recording whose bytes or time changed when credentials were written beside it, or a pair the validator refuses |
+| G29 | A digest or an action that differs between the manifest beside a file, the signed facts inside it and the report |
+| G30 | A signer name that is not the certificate's, a trust state that is not the validator's, or a fourth state |
 | G52 | A count, a table or a documented gate step that no longer matches the repository |
 | G54 | A tracked file the ignore file says never enters the repository, or a tracked file larger than source ever is |
 
@@ -154,14 +165,14 @@ recording or a key at the door for a repository owned by a person, so the suite 
 
 ### Committed, with the milestone that will enforce each
 
-Twenty-six further guarantees are written down against the milestone that will enforce them, from the
-provenance of M3 to the production signer chain at M9.
+Twenty-two further guarantees are written down against the milestone that will enforce them, from the
+website of M4 to the production signer chain at M9.
 [`docs/guarantees.md`](docs/guarantees.md) is the whole ledger.
 
 ## Evidence
 
 Every load-bearing assumption in this project is a **probe**: a question, the method that answers it, and the
-decision it settles. There are 40 of them, and the register says what is known about each in the only four
+decision it settles. There are 41 of them, and the register says what is known about each in the only four
 words it admits: `measured`, `reasoned`, `unavailable`, `not started`. The last two are never read as a pass.
 
 ```console
@@ -184,6 +195,9 @@ $ ./target/release/adiungere verify clip.manifest.json clip.mp4
 $ ./target/release/adiungere detect /media/card/
 $ ./target/release/adiungere export clip.mp4 --camera rear --out rear.mp4
 $ ./target/release/adiungere export front.mp4 rear.mp4 --out both.mp4
+$ ./target/release/adiungere export clip.mp4 --camera rear --out rear.mp4 --sign --time-authority https://freetsa.org/tsr
+$ ./target/release/adiungere sign clip.mp4
+$ ./target/release/adiungere timestamp rear.mp4.manifest.json --time-authority https://freetsa.org/tsr
 ```
 
 `inspect` reads the headers and never the media; `fingerprint` reads every byte and writes the manifest;
@@ -193,8 +207,12 @@ the commands that reproduce each number. `export` writes one camera, or both, or
 `--tracks`, copying every coded sample byte for byte, keeping the recorder's boxes, and placing the movie
 box first; given two files it joins the front of the first and the video of the second into one two-track
 file. It writes a manifest beside the output, reads the output back and refuses to keep it unless every
-track carries its source's fingerprint. Every command prints prose for a person or, with `--format json`,
-one document for a pipeline, and none of them returns a verdict about a recording.
+track carries its source's fingerprint. With `--sign` it signs last, the Content Credentials embedded in
+the final file and the manifest inside them. `sign` writes credentials beside a recording, which it never
+touches; `timestamp` asks a time-stamping authority for a token over a file; `verify` reads the credentials
+a file carries and the token beside its manifest, and says what the validator found in three words that
+never round up. Every command prints prose for a person or, with `--format json`, one document for a
+pipeline, and none of them returns a verdict about a recording.
 
 [`docs/getting-started.md`](docs/getting-started.md) has the tools, the gate sequence and where things are.
 
@@ -204,6 +222,8 @@ one document for a pipeline, and none of them returns a verdict about a recordin
 - [`docs/architecture.md`](docs/architecture.md), what owns what and why the boundary sits there
 - [`docs/testing.md`](docs/testing.md), the method, the gates and how a guarantee is written
 - [`docs/integrity.md`](docs/integrity.md), what is proved, how each number is defined, how to reproduce it
+- [`docs/verification-guide.md`](docs/verification-guide.md), for the driver, the claims handler and the
+  lawyer
 - [`docs/evidence.md`](docs/evidence.md), the probe register
 - [`docs/guarantees.md`](docs/guarantees.md), every guarantee and the milestone that enforces it
 - [`docs/adr/`](docs/adr/README.md), the decisions, each with the check that makes it hold

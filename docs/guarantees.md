@@ -49,6 +49,10 @@ contiguous range.
 | G24 | No source file of the reading crates opens a file for writing, moves, copies, truncates or re-dates one, the scan cache excepted for its own file; and every command of the product, run on a recording, leaves that recording's digest and modification time exactly as they were. Each shell adds its own scripted session, from M4 to M8 | [ADR-0006](adr/0006-every-export-goes-through-the-core.md) |
 | G25 | No crate of the resolved dependency graph is an encoder, a media framework that bundles one, or a binding named after one; and the release command line, built with its symbol table kept, carries no defined or imported symbol from the forbidden list, read with the toolchain's symbol reader after a fixture carrying one such name has been refused first | [ADR-0006](adr/0006-every-export-goes-through-the-core.md) |
 | G26 | Every sign the derivative detector declares is raised by at least one corpus recording scanned as one population, the reference-like recording raises none, each sign is worded from the catalogue in the command line's description, and a container whose name fits no grammar is described as unplaced and never as clean | [ADR-0005](adr/0005-the-product-never-returns-a-verdict.md) |
+| G27 | Signing is the last step: an export the product signs is valid to the pinned validator, which is not this product; the same file remuxed with every sample kept and the store kept, as a rewriter that does not know the standard produces it, is invalid on the hash of the container; signing it again makes it valid; and the product's own reader reports the same three states | [ADR-0009](adr/0009-sign-last-and-a-single-key-custody.md) |
+| G28 | Every corpus recording that receives credentials beside it keeps its bytes and its modification time, the credentials are found under the recording's stem by the pinned validator, which finds the binding intact, and one changed byte of the recording is seen to make it refuse the pair | [ADR-0009](adr/0009-sign-last-and-a-single-key-custody.md) |
+| G29 | For an export signed through the command line, every track digest and every source digest is the same in the manifest beside the file, in the signed facts the validator reads out of the file and in the report rendered for a person, and the action recorded follows from the export class alone: a stream copy is a repackaging, a re-encoding a transcoding, a recording as it is an opening | [`docs/integrity.md`](integrity.md) |
+| G30 | The signer's common name the product shows is the one the pinned validator reads from the certificate; a chain that leads to no trust list is shown as exactly that and never as more; a broken binding is shown as invalid with the validator's code; and the product's state type has one variant per validator state, so no fourth word exists | [ADR-0015](adr/0015-what-a-relayed-signature-proves.md) |
 | G52 | The ledger accounts for every identifier exactly once; the enforced tables list exactly the guarantees the suite holds and each of those holds a test; the README's counts of guarantees and probes and the changelog's count of decision records match the repository; and the gate sequence the documentation lists is the one the script runs, in both directions and in order | this document |
 | G54 | Nothing the ignore file refuses is tracked, under any casing, with the rules read from the ignore file itself; and no tracked file exceeds one mebibyte, because source is never that large and a recording or a build artefact is | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 
@@ -60,18 +64,11 @@ and this repository is not one, so the suite holds the door instead.
 
 ## Committed, with the milestone that will enforce each
 
-Two of the enforced guarantees grow with the surfaces: **G22** compares the WebAssembly writer from M4, and
-**G24** adds a scripted session for each shell from M4 to M8. Neither is listed again below, because the
-test that holds each already exists and the extension is a row in that test, not a new guarantee.
-
-### M3, provenance
-
-| Id | Guarantee |
-|---|---|
-| G27 | Signing is the last step: a rewrite applied after signing invalidates the binding, and re-signing restores it |
-| G28 | An original that receives an external manifest is byte-identical to the original |
-| G29 | The report, the provenance manifest and the integrity manifest agree on every digest and every action |
-| G30 | The displayed signer identity equals the certificate subject, and the trust state equals the validator's result |
+Three of the enforced guarantees grow with the surfaces: **G22** compares the WebAssembly writer from M4,
+**G24** adds a scripted session for each shell from M4 to M8, and **G30** holds each surface's rendering of
+the signer and the state from M4 to M9, when a credential from a listed authority gives the third state
+something to show. None is listed again below, because the test that holds each already exists and the
+extension is a row in that test, not a new guarantee.
 
 ### M4, website and shared player
 

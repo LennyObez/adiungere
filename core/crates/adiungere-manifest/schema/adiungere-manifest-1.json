@@ -1,88 +1,42 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Manifest",
-  "description": "The manifest.",
-  "type": "object",
-  "properties": {
-    "file": {
-      "description": "The file that was seen.",
-      "$ref": "#/$defs/FileRecord"
-    },
-    "format": {
-      "description": "The format identifier, always [`MANIFEST_FORMAT`].",
-      "type": "string"
-    },
-    "produced": {
-      "description": "How and when this record was made.",
-      "$ref": "#/$defs/Produced"
-    },
-    "times": {
-      "description": "Every time the file carries, each with its clock.",
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/TimeValue"
-      }
-    },
-    "tracks": {
-      "description": "Every track, in file order.",
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/TrackRecord"
-      }
-    },
-    "vendor": {
-      "description": "The vendor boxes, preserved as bytes and digested, never interpreted.",
-      "$ref": "#/$defs/VendorRecord"
-    }
-  },
-  "additionalProperties": false,
-  "required": [
-    "format",
-    "produced",
-    "file",
-    "tracks",
-    "vendor",
-    "times"
-  ],
   "$defs": {
     "AnnexBDigest": {
+      "additionalProperties": false,
       "description": "The digest of a track's elementary stream.",
-      "type": "object",
       "properties": {
         "access_units": {
           "description": "How many access units, which is how many samples, the stream holds.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "parameter_set_insertions": {
           "description": "How many times the parameter sets were inserted.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "rule": {
           "description": "The rule that produced this record.",
           "type": "string"
         },
         "sha256": {
-          "description": "The digest of the stream.",
-          "$ref": "#/$defs/Sha256Digest"
+          "$ref": "#/$defs/Sha256Digest",
+          "description": "The digest of the stream."
         },
         "stream_bytes": {
           "description": "How many bytes the stream holds.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "track_index": {
           "description": "The zero-based position of the track under the movie box.",
-          "type": "integer",
           "format": "uint",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         }
       },
-      "additionalProperties": false,
       "required": [
         "rule",
         "track_index",
@@ -90,72 +44,72 @@
         "access_units",
         "parameter_set_insertions",
         "sha256"
-      ]
+      ],
+      "type": "object"
     },
     "EditEntry": {
+      "additionalProperties": false,
       "description": "One entry of an edit list.",
-      "type": "object",
       "properties": {
         "media_rate": {
           "description": "The rate as 16.16 fixed point.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "media_time": {
           "description": "The media time in media ticks, negative for an empty edit.",
-          "type": "integer",
-          "format": "int64"
+          "format": "int64",
+          "type": "integer"
         },
         "segment_duration": {
           "description": "The segment duration in movie ticks.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         }
       },
-      "additionalProperties": false,
       "required": [
         "segment_duration",
         "media_time",
         "media_rate"
-      ]
+      ],
+      "type": "object"
     },
     "ExportClass": {
       "description": "The four classes an export can belong to, permanent labels that every surface derives its wording\nfrom and nothing else.",
       "oneOf": [
         {
+          "const": "extraction",
           "description": "Coded samples of some tracks copied byte for byte into a rebuilt container.",
-          "type": "string",
-          "const": "extraction"
+          "type": "string"
         },
         {
+          "const": "two_track_archive",
           "description": "Every camera as its own video track plus the audio, in one rebuilt container, with no encoder.",
-          "type": "string",
-          "const": "two_track_archive"
+          "type": "string"
         },
         {
+          "const": "rendition_lossy",
           "description": "Composed and re-encoded; the default composition.",
-          "type": "string",
-          "const": "rendition_lossy"
+          "type": "string"
         },
         {
+          "const": "rendition_lossless_verified",
           "description": "Composed and re-encoded without loss, a label granted only after every frame was decoded and\ncompared with its source.",
-          "type": "string",
-          "const": "rendition_lossless_verified"
+          "type": "string"
         }
       ]
     },
     "FileRecord": {
+      "additionalProperties": false,
       "description": "The file that was seen.",
-      "type": "object",
       "properties": {
         "name": {
           "description": "The file name, without its directory.",
           "type": "string"
         },
         "sha256": {
-          "description": "The digest of every byte, when the whole file was read.",
           "anyOf": [
             {
               "$ref": "#/$defs/Sha256Digest"
@@ -163,43 +117,44 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The digest of every byte, when the whole file was read."
         },
         "size": {
           "description": "The size in bytes.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "structure": {
-          "description": "The container's shape.",
-          "$ref": "#/$defs/Structure"
+          "$ref": "#/$defs/Structure",
+          "description": "The container's shape."
         }
       },
-      "additionalProperties": false,
       "required": [
         "name",
         "size",
         "structure"
-      ]
+      ],
+      "type": "object"
     },
     "Masking": {
       "description": "What an export did to the people, the plates and the burned-in strip in the picture.",
       "oneOf": [
         {
+          "const": "none",
           "description": "Nothing was masked: the file is for a claim or a court, and the recipient needs every detail.",
-          "type": "string",
-          "const": "none"
+          "type": "string"
         },
         {
+          "const": "faces_and_plates",
           "description": "Faces and number plates were masked, in a re-encoded rendition.",
-          "type": "string",
-          "const": "faces_and_plates"
+          "type": "string"
         },
         {
+          "const": "faces_plates_and_strip",
           "description": "Faces, number plates and the strip the recorder burns into the picture were masked.",
-          "type": "string",
-          "const": "faces_plates_and_strip"
+          "type": "string"
         }
       ]
     },
@@ -208,44 +163,43 @@
       "oneOf": [
         {
           "description": "The file was read and nothing was written.",
-          "type": "object",
           "properties": {
             "kind": {
-              "type": "string",
-              "const": "inspection"
+              "const": "inspection",
+              "type": "string"
             },
             "scope": {
-              "description": "How much was read.",
-              "$ref": "#/$defs/Scope"
+              "$ref": "#/$defs/Scope",
+              "description": "How much was read."
             }
           },
           "required": [
             "kind",
             "scope"
-          ]
+          ],
+          "type": "object"
         },
         {
           "description": "The file this manifest describes was written from the sources listed, by the core.",
-          "type": "object",
           "properties": {
             "class": {
-              "description": "The class of the export, which is what every integrity sentence about it derives from.",
-              "$ref": "#/$defs/ExportClass"
+              "$ref": "#/$defs/ExportClass",
+              "description": "The class of the export, which is what every integrity sentence about it derives from."
             },
             "kind": {
-              "type": "string",
-              "const": "export"
+              "const": "export",
+              "type": "string"
             },
             "masking": {
-              "description": "What was done to faces, plates and the burned-in strip, chosen explicitly and never defaulted.",
-              "$ref": "#/$defs/Masking"
+              "$ref": "#/$defs/Masking",
+              "description": "What was done to faces, plates and the burned-in strip, chosen explicitly and never defaulted."
             },
             "sources": {
               "description": "The recordings the output was made from, with the fingerprints of the tracks taken from each.",
-              "type": "array",
               "items": {
                 "$ref": "#/$defs/SourceRecord"
-              }
+              },
+              "type": "array"
             }
           },
           "required": [
@@ -253,21 +207,22 @@
             "class",
             "masking",
             "sources"
-          ]
+          ],
+          "type": "object"
         }
       ]
     },
     "Produced": {
+      "additionalProperties": false,
       "description": "How and when a manifest was made.",
-      "type": "object",
       "properties": {
         "at": {
-          "description": "When, by the system clock.",
-          "$ref": "#/$defs/TimeValue"
+          "$ref": "#/$defs/TimeValue",
+          "description": "When, by the system clock."
         },
         "operation": {
-          "description": "What was done.",
-          "$ref": "#/$defs/Operation"
+          "$ref": "#/$defs/Operation",
+          "description": "What was done."
         },
         "platform": {
           "description": "The operating system and architecture the tool ran on.",
@@ -282,45 +237,44 @@
           "type": "string"
         }
       },
-      "additionalProperties": false,
       "required": [
         "tool",
         "version",
         "platform",
         "at",
         "operation"
-      ]
+      ],
+      "type": "object"
     },
     "Scope": {
       "description": "How much of a file an inspection read.",
       "oneOf": [
         {
+          "const": "structure",
           "description": "The structure only: headers and the movie box, never the media.",
-          "type": "string",
-          "const": "structure"
+          "type": "string"
         },
         {
+          "const": "full",
           "description": "Every byte: the structure, then every sample for the fingerprints and the whole file for its digest.",
-          "type": "string",
-          "const": "full"
+          "type": "string"
         }
       ]
     },
     "Sha256Digest": {
       "description": "A SHA-256 digest as sixty-four lower-case hexadecimal characters.",
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
     },
     "SourceRecord": {
+      "additionalProperties": false,
       "description": "One recording an export was made from.",
-      "type": "object",
       "properties": {
         "name": {
           "description": "The file name, without its directory.",
           "type": "string"
         },
         "sha256": {
-          "description": "The digest of the whole source, when it was read in full.",
           "anyOf": [
             {
               "$ref": "#/$defs/Sha256Digest"
@@ -328,35 +282,35 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The digest of the whole source, when it was read in full."
         },
         "size": {
           "description": "The size in bytes.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "tracks": {
           "description": "The tracks taken from this source, each with the fingerprint it had there.",
-          "type": "array",
           "items": {
             "$ref": "#/$defs/SourceTrack"
-          }
+          },
+          "type": "array"
         }
       },
-      "additionalProperties": false,
       "required": [
         "name",
         "size",
         "tracks"
-      ]
+      ],
+      "type": "object"
     },
     "SourceTrack": {
+      "additionalProperties": false,
       "description": "One track taken from a source.",
-      "type": "object",
       "properties": {
         "fingerprint": {
-          "description": "The track's fingerprint in the source, which an extraction preserves and a rendition does not.",
           "anyOf": [
             {
               "$ref": "#/$defs/TrackFingerprint"
@@ -364,52 +318,53 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The track's fingerprint in the source, which an extraction preserves and a rendition does not."
         },
         "index": {
           "description": "The track's index under the source's movie box.",
-          "type": "integer",
           "format": "uint",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "output_index": {
           "description": "The track's index under the output's movie box.",
-          "type": "integer",
           "format": "uint",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         }
       },
-      "additionalProperties": false,
       "required": [
         "index",
         "output_index"
-      ]
+      ],
+      "type": "object"
     },
     "StructuralFingerprint": {
+      "additionalProperties": false,
       "description": "The observations and their digest.",
-      "type": "object",
       "properties": {
         "observations": {
           "description": "The observations, one per line, in the order they were digested.",
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "type": "array"
         },
         "sha256": {
-          "description": "The digest of the observations joined by newlines.",
-          "$ref": "#/$defs/Sha256Digest"
+          "$ref": "#/$defs/Sha256Digest",
+          "description": "The digest of the observations joined by newlines."
         }
       },
-      "additionalProperties": false,
       "required": [
         "observations",
         "sha256"
-      ]
+      ],
+      "type": "object"
     },
     "Structure": {
+      "additionalProperties": false,
       "description": "The container's shape.",
-      "type": "object",
       "properties": {
         "brand": {
           "description": "The major brand, when the file has a file type box.",
@@ -420,26 +375,26 @@
         },
         "clipped_tail_bytes": {
           "description": "How many bytes at the end of the file do not read as a box, or belong to a box that declares more\nthan the file holds; nothing when the file ends with a well-formed box.",
+          "format": "uint64",
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0
+          ]
         },
         "compatible_brands": {
           "description": "The compatible brands.",
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "type": "array"
         },
         "encoder_tags": {
           "description": "The compressor names and handler names found, in order, without duplicates.",
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "type": "array"
         },
         "moov_before_mdat": {
           "description": "Whether the movie box precedes the first media data box; nothing when there is no media data box.",
@@ -450,29 +405,28 @@
         },
         "moov_offset": {
           "description": "Where the movie box starts.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "moov_size": {
           "description": "How large the movie box is.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "structural_fingerprint": {
-          "description": "The structural fingerprint.",
-          "$ref": "#/$defs/StructuralFingerprint"
+          "$ref": "#/$defs/StructuralFingerprint",
+          "description": "The structural fingerprint."
         },
         "top_level": {
           "description": "The top-level box types in file order.",
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "type": "array"
         }
       },
-      "additionalProperties": false,
       "required": [
         "compatible_brands",
         "top_level",
@@ -480,113 +434,113 @@
         "moov_size",
         "encoder_tags",
         "structural_fingerprint"
-      ]
+      ],
+      "type": "object"
     },
     "TimeSource": {
       "description": "The closed set of clocks a time can be read from.",
       "oneOf": [
         {
+          "const": "container_clock",
           "description": "The creation time in the container's movie header, written by the recorder.",
-          "type": "string",
-          "const": "container_clock"
+          "type": "string"
         },
         {
+          "const": "satellite_clock",
           "description": "A satellite sentence in the vendor telemetry.",
-          "type": "string",
-          "const": "satellite_clock"
+          "type": "string"
         },
         {
+          "const": "file_name",
           "description": "The recording's file name, under a naming grammar.",
-          "type": "string",
-          "const": "file_name"
+          "type": "string"
         },
         {
+          "const": "system_clock_at_manifest",
           "description": "The system clock of the machine producing the manifest.",
-          "type": "string",
-          "const": "system_clock_at_manifest"
+          "type": "string"
         }
       ]
     },
     "TimeValue": {
+      "additionalProperties": false,
       "description": "A time, with its clock.",
-      "type": "object",
       "properties": {
         "note": {
           "description": "What is known about that clock, in one sentence.",
           "type": "string"
         },
         "source": {
-          "description": "The clock the instant was read from.",
-          "$ref": "#/$defs/TimeSource"
+          "$ref": "#/$defs/TimeSource",
+          "description": "The clock the instant was read from."
         },
         "value": {
           "description": "The instant, as `YYYY-MM-DDTHH:MM:SSZ` when the clock is known to be UTC, and as\n`YYYY-MM-DDTHH:MM:SS` with no designator when it is not.",
           "type": "string"
         }
       },
-      "additionalProperties": false,
       "required": [
         "value",
         "source",
         "note"
-      ]
+      ],
+      "type": "object"
     },
     "TrackFingerprint": {
+      "additionalProperties": false,
       "description": "A track's fingerprint.",
-      "type": "object",
       "properties": {
         "configuration_box": {
           "description": "The type of the decoder configuration box that was digested.",
           "type": "string"
         },
         "configuration_sha256": {
-          "description": "The digest of the decoder configuration box's payload, as stored.",
-          "$ref": "#/$defs/Sha256Digest"
+          "$ref": "#/$defs/Sha256Digest",
+          "description": "The digest of the decoder configuration box's payload, as stored."
         },
         "nal_length_size": {
           "description": "The width of the length prefix on every unit, for a video track whose configuration declares one.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0
+          ]
         },
         "payload_sha256": {
-          "description": "The digest of every sample's stored bytes in decode order.",
-          "$ref": "#/$defs/Sha256Digest"
+          "$ref": "#/$defs/Sha256Digest",
+          "description": "The digest of every sample's stored bytes in decode order."
         },
         "sample_bytes": {
           "description": "How many bytes were digested.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "sample_count": {
           "description": "How many samples were digested.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "track_id": {
           "description": "The track identifier from its header.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "track_index": {
           "description": "The zero-based position of the track under the movie box.",
-          "type": "integer",
           "format": "uint",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "version": {
           "description": "The definition that produced this record.",
           "type": "string"
         }
       },
-      "additionalProperties": false,
       "required": [
         "version",
         "track_index",
@@ -596,58 +550,59 @@
         "payload_sha256",
         "configuration_box",
         "configuration_sha256"
-      ]
+      ],
+      "type": "object"
     },
     "TrackKind": {
       "description": "What a track carries.",
       "oneOf": [
         {
+          "const": "video",
           "description": "Video.",
-          "type": "string",
-          "const": "video"
+          "type": "string"
         },
         {
+          "const": "audio",
           "description": "Audio.",
-          "type": "string",
-          "const": "audio"
+          "type": "string"
         },
         {
+          "additionalProperties": false,
           "description": "Something else, named by its handler type.",
-          "type": "object",
           "properties": {
             "other": {
               "type": "string"
             }
           },
-          "additionalProperties": false,
           "required": [
             "other"
-          ]
+          ],
+          "type": "object"
         }
       ]
     },
     "TrackRecord": {
+      "additionalProperties": false,
       "description": "One track.",
-      "type": "object",
       "properties": {
         "average_bit_rate": {
           "description": "The average bit rate in bits per second, from sample bytes over media duration.",
+          "format": "uint64",
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0
+          ]
         },
         "channels": {
           "description": "The channel count, for audio.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
+          ]
         },
         "codec_string": {
           "description": "The codec string in the registered web form, when it can be derived.",
@@ -666,31 +621,30 @@
         },
         "duration_milliseconds": {
           "description": "The media duration in milliseconds.",
+          "format": "uint64",
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint64",
-          "minimum": 0
+          ]
         },
         "duration_ticks": {
           "description": "The media duration in ticks.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "edit_list": {
           "description": "The edit list, when the track has one.",
+          "items": {
+            "$ref": "#/$defs/EditEntry"
+          },
           "type": [
             "array",
             "null"
-          ],
-          "items": {
-            "$ref": "#/$defs/EditEntry"
-          }
+          ]
         },
         "elementary_stream": {
-          "description": "The elementary stream digest, for advanced video when the samples were read.",
           "anyOf": [
             {
               "$ref": "#/$defs/AnnexBDigest"
@@ -698,14 +652,14 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The elementary stream digest, for advanced video when the samples were read."
         },
         "enabled": {
           "description": "Whether the enabled flag is set.",
           "type": "boolean"
         },
         "fingerprint": {
-          "description": "The track fingerprint, when the samples were read.",
           "anyOf": [
             {
               "$ref": "#/$defs/TrackFingerprint"
@@ -713,79 +667,79 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The track fingerprint, when the samples were read."
         },
         "flags": {
           "description": "The track header flags.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "height": {
           "description": "The coded height in pixels, for video.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
+          ]
         },
         "id": {
           "description": "The identifier from the track header.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "index": {
           "description": "The zero-based position under the movie box.",
-          "type": "integer",
           "format": "uint",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "kind": {
-          "description": "What the track carries.",
-          "$ref": "#/$defs/TrackKind"
+          "$ref": "#/$defs/TrackKind",
+          "description": "What the track carries."
         },
         "sample_count": {
           "description": "How many samples.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "sample_rate": {
           "description": "The sample rate, for audio.",
+          "format": "uint32",
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
+          ]
         },
         "sync_sample_count": {
           "description": "How many sync samples.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "timescale": {
           "description": "The media timescale.",
-          "type": "integer",
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "width": {
           "description": "The coded width in pixels, for video.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ],
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
+          ]
         }
       },
-      "additionalProperties": false,
       "required": [
         "index",
         "id",
@@ -798,28 +752,28 @@
         "composition_offsets",
         "flags",
         "enabled"
-      ]
+      ],
+      "type": "object"
     },
     "VendorBox": {
+      "additionalProperties": false,
       "description": "One vendor box.",
-      "type": "object",
       "properties": {
         "kind": {
           "description": "Its type code.",
           "type": "string"
         },
         "location": {
-          "description": "Where it sits.",
-          "$ref": "#/$defs/VendorLocation"
+          "$ref": "#/$defs/VendorLocation",
+          "description": "Where it sits."
         },
         "offset": {
           "description": "Where it starts.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "sha256": {
-          "description": "The digest of the whole box, header included, when its bytes were held.",
           "anyOf": [
             {
               "$ref": "#/$defs/Sha256Digest"
@@ -827,64 +781,110 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The digest of the whole box, header included, when its bytes were held."
         },
         "size": {
           "description": "Its size, header included.",
-          "type": "integer",
           "format": "uint64",
-          "minimum": 0
+          "minimum": 0,
+          "type": "integer"
         },
         "standard": {
           "description": "Whether the type is one the base media file format or its 3GPP extension defines under the\nuser-data box, such as the metadata box a common muxer writes. A standard box is preserved and\ndigested like any other; it is not counted as a recorder's box when the vendor boxes are said to be\npresent or absent.",
           "type": "boolean"
         }
       },
-      "additionalProperties": false,
       "required": [
         "location",
         "kind",
         "offset",
         "size",
         "standard"
-      ]
+      ],
+      "type": "object"
     },
     "VendorLocation": {
       "description": "Where a vendor box sits.",
       "oneOf": [
         {
+          "const": "user_data",
           "description": "A child of the user-data box under the movie box.",
-          "type": "string",
-          "const": "user_data"
+          "type": "string"
         },
         {
+          "const": "top_level",
           "description": "A top-level box that is not part of the standard.",
-          "type": "string",
-          "const": "top_level"
+          "type": "string"
         }
       ]
     },
     "VendorRecord": {
+      "additionalProperties": false,
       "description": "The vendor boxes.",
-      "type": "object",
       "properties": {
         "boxes": {
           "description": "Every vendor box, in file order.",
-          "type": "array",
           "items": {
             "$ref": "#/$defs/VendorBox"
-          }
+          },
+          "type": "array"
         },
         "interpreted": {
           "description": "Whether any of them was interpreted. Always false at this version: they are bytes.",
           "type": "boolean"
         }
       },
-      "additionalProperties": false,
       "required": [
         "boxes",
         "interpreted"
-      ]
+      ],
+      "type": "object"
     }
-  }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The manifest.",
+  "properties": {
+    "file": {
+      "$ref": "#/$defs/FileRecord",
+      "description": "The file that was seen."
+    },
+    "format": {
+      "description": "The format identifier, always [`MANIFEST_FORMAT`].",
+      "type": "string"
+    },
+    "produced": {
+      "$ref": "#/$defs/Produced",
+      "description": "How and when this record was made."
+    },
+    "times": {
+      "description": "Every time the file carries, each with its clock.",
+      "items": {
+        "$ref": "#/$defs/TimeValue"
+      },
+      "type": "array"
+    },
+    "tracks": {
+      "description": "Every track, in file order.",
+      "items": {
+        "$ref": "#/$defs/TrackRecord"
+      },
+      "type": "array"
+    },
+    "vendor": {
+      "$ref": "#/$defs/VendorRecord",
+      "description": "The vendor boxes, preserved as bytes and digested, never interpreted."
+    }
+  },
+  "required": [
+    "format",
+    "produced",
+    "file",
+    "tracks",
+    "vendor",
+    "times"
+  ],
+  "title": "Manifest",
+  "type": "object"
 }

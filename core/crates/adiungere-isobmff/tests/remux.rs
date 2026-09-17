@@ -326,6 +326,7 @@ fn a_plan_that_drops_the_vendor_boxes_writes_none() {
         &RemuxPlan {
             keep_udta: false,
             keep_unknown_top_level: false,
+            keep_manifest_store: false,
         },
         &mut out,
         &mut |_| true,
@@ -918,4 +919,73 @@ fn an_unknown_top_level_box_too_large_to_hold_is_still_carried_across() {
             .any(|b| b.kind == b"abcd" && b.size == big.len() as u64)
     );
     assert!(container.ranges_tile_the_file());
+}
+
+/// A `uuid` box with the extended type the provenance standard reserves for a manifest store.
+fn manifest_store_box(payload: &[u8]) -> Vec<u8> {
+    let extended: [u8; 16] = [
+        0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81,
+    ];
+    let mut bytes = Vec::new();
+    let size = u32::try_from(payload.len() + 24).unwrap_or(u32::MAX);
+    bytes.extend_from_slice(&size.to_be_bytes());
+    bytes.extend_from_slice(b"uuid");
+    bytes.extend_from_slice(&extended);
+    bytes.extend_from_slice(payload);
+    bytes
+}
+
+#[test]
+fn a_manifest_store_is_left_out_and_reported_unless_the_plan_keeps_it() {
+    // A store is bound to the bytes of the file it was written into; carried into a rewritten file it can
+    // only be wrong, so the default leaves it out and says so, and any other `uuid` box is carried.
+
+    // Arrange
+    let mut original = build(&Spec::reference_like()).unwrap().bytes().unwrap();
+    let store = manifest_store_box(&[7u8; 300]);
+    let mut other_uuid = Vec::new();
+    other_uuid.extend_from_slice(&(24u32 + 4).to_be_bytes());
+    other_uuid.extend_from_slice(b"uuid");
+    other_uuid.extend_from_slice(&[0x11u8; 16]);
+    other_uuid.extend_from_slice(&[1, 2, 3, 4]);
+    original.extend_from_slice(&store);
+    original.extend_from_slice(&other_uuid);
+    let mut source = SliceSource::new(&original);
+    let container = parse(&mut source).unwrap();
+
+    // Act
+    let (default_out, default_report) = extract(&original, &[0, 1, 2]).unwrap();
+    let mut inputs = [Input {
+        container: &container,
+        source: &mut source,
+        tracks: vec![0, 1, 2],
+    }];
+    let plan = RemuxPlan {
+        keep_manifest_store: true,
+        ..RemuxPlan::default()
+    };
+    let mut kept_out = Vec::new();
+    let kept_report = remux(&mut inputs, &plan, &mut kept_out, &mut |_| true).unwrap();
+
+    // Assert
+    let uuid_count = |bytes: &[u8]| {
+        parsed(bytes)
+            .unwrap()
+            .top_level()
+            .iter()
+            .filter(|range| range.kind == b"uuid")
+            .count()
+    };
+    assert!(default_report.credentials_left_out);
+    assert_eq!(uuid_count(&default_out), 1, "the other uuid box is carried");
+    assert!(
+        !default_out.windows(16).any(|window| window == &store[8..24]),
+        "the store's extended type is nowhere in the output"
+    );
+    assert!(!kept_report.credentials_left_out);
+    assert_eq!(
+        uuid_count(&kept_out),
+        2,
+        "the plan that keeps the store carries both"
+    );
 }

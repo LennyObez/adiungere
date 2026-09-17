@@ -49,6 +49,11 @@ pub struct RemuxPlan {
     pub keep_udta: bool,
     /// Whether the unknown top-level boxes of the first input are copied as bytes, after the movie box.
     pub keep_unknown_top_level: bool,
+    /// Whether a manifest store the first input carries is copied like any other top-level box. Off by
+    /// default, because a store is bound to the bytes of the file it was written into and is wrong in
+    /// any other; on, it produces exactly the file a rewriter that does not know the standard produces,
+    /// which is what a test of the validators needs.
+    pub keep_manifest_store: bool,
 }
 
 impl Default for RemuxPlan {
@@ -56,6 +61,7 @@ impl Default for RemuxPlan {
         Self {
             keep_udta: true,
             keep_unknown_top_level: true,
+            keep_manifest_store: false,
         }
     }
 }
@@ -127,6 +133,9 @@ pub struct RemuxReport {
     /// How many track references pointed at a track the output does not hold and were dropped, so that
     /// nothing in the output refers to a track that is not there.
     pub references_dropped: u32,
+    /// Whether the primary input carried a manifest store, which is bound to the bytes of the file it was
+    /// written into and is therefore left out of a rewritten one rather than carried across as a box.
+    pub credentials_left_out: bool,
 }
 
 /// One track selected for the output, with everything the layout needs.
@@ -185,11 +194,17 @@ pub fn remux(
         .find(|range| range.kind == b"ftyp")
         .map(|range| held(primary, range))
         .transpose()?;
-    let unknown: Vec<&BoxRange> = if plan.keep_unknown_top_level {
-        primary.unknown_top_level()
-    } else {
-        Vec::new()
-    };
+    // A manifest store is not a recorder's box: bound to the bytes of the file it was written into, it
+    // can only be wrong in a rewritten one, so it is left out and reported rather than carried across.
+    let mut unknown: Vec<&BoxRange> = Vec::new();
+    let mut credentials_left_out = false;
+    for range in primary.unknown_top_level() {
+        if !plan.keep_manifest_store && is_manifest_store(inputs, range)? {
+            credentials_left_out = true;
+        } else if plan.keep_unknown_top_level {
+            unknown.push(range);
+        }
+    }
     let before_moov = ftyp.map_or(0, |bytes| bytes.len() as u64);
     let after_moov: u64 = unknown.iter().map(|range| range.size).sum();
     let large_mdat = needs_large_header(media);
@@ -252,7 +267,26 @@ pub fn remux(
         chunks: u32::try_from(chunks.len()).unwrap_or(u32::MAX),
         renumbered,
         references_dropped,
+        credentials_left_out,
     })
+}
+
+/// The extended type of the box the provenance standard reserves for a manifest store.
+const MANIFEST_STORE: [u8; 16] = [
+    0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81,
+];
+
+/// Whether a top-level box of the primary input is a manifest store: a `uuid` box whose extended type is
+/// the reserved one, read from the source so that a store larger than the reader holds is seen too.
+fn is_manifest_store(inputs: &mut [Input<'_>], range: &BoxRange) -> Result<bool, Error> {
+    if range.kind != b"uuid" || range.size < 24 {
+        return Ok(false);
+    }
+    let input = inputs.first_mut().ok_or(Error::NothingSelected)?;
+    let extended = input
+        .source
+        .read_range(range.offset.saturating_add(8), MANIFEST_STORE.len())?;
+    Ok(extended == MANIFEST_STORE)
 }
 
 /// The boxes carried across as bytes, in output order.

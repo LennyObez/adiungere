@@ -77,6 +77,11 @@ pub enum MediaFailure {
         /// What went wrong.
         cause: adiungere_isobmff::Error,
     },
+    /// A signing, a time stamp or a reading of credentials failed.
+    Provenance {
+        /// What went wrong.
+        cause: String,
+    },
     /// A path the export would write is a recording it reads.
     Overwrite {
         /// The path that would be written.
@@ -110,6 +115,7 @@ impl std::fmt::Display for MediaFailure {
             Self::Serialisation { cause } => write!(formatter, "cannot write the answer: {cause}"),
             Self::Selection { path, reason } => write!(formatter, "{}: {reason}", path.display()),
             Self::Export { path, cause } => write!(formatter, "{}: {cause}", path.display()),
+            Self::Provenance { cause } => write!(formatter, "{cause}"),
             Self::Overwrite { path, source } => write!(
                 formatter,
                 "{} is the recording {} being exported; nothing was written",
@@ -137,17 +143,17 @@ pub enum Output {
     Json,
 }
 
-fn producer() -> Producer {
+pub(crate) fn producer() -> Producer {
     Producer::current("adiungere", env!("CARGO_PKG_VERSION"))
 }
 
-fn json<T: serde::Serialize>(value: &T) -> Result<String, MediaFailure> {
+pub(crate) fn json<T: serde::Serialize>(value: &T) -> Result<String, MediaFailure> {
     serde_json::to_string_pretty(value)
         .map(|text| format!("{text}\n"))
         .map_err(|cause| MediaFailure::Serialisation { cause })
 }
 
-fn file_name(path: &Path) -> String {
+pub(crate) fn file_name(path: &Path) -> String {
     path.file_name().map_or_else(
         || path.display().to_string(),
         |name| name.to_string_lossy().into_owned(),
@@ -255,29 +261,72 @@ pub fn detect(paths: &[PathBuf], output: Output, cache_at: Option<&Path>) -> Res
     Ok(Rendered { text, negative })
 }
 
-/// Compares a manifest with a file. The answer is a no when any compared subject differs.
+/// What `verify` found: the comparison, and the credentials and the time-stamp token when there are any.
+#[derive(Debug, serde::Serialize)]
+struct Verified {
+    /// The comparison of the manifest with the file, subject by subject.
+    comparison: Verification,
+    /// The Content Credentials embedded in the file or beside it, when there are any.
+    credentials: Option<crate::provenance::CredentialsCheck>,
+    /// The time-stamp token beside the manifest, when there is one.
+    token: Option<crate::provenance::TokenCheck>,
+}
+
+/// Compares a manifest with a file, then reads the Content Credentials the file carries and the time-stamp
+/// token beside the manifest, when there are any. The answer is a no when any compared subject differs,
+/// when the credentials do not hold, or when the token does not name the manifest.
 ///
 /// # Errors
 ///
-/// Returns a failure when the manifest or the file cannot be read.
+/// Returns a failure when the manifest, the file, the credentials or the token cannot be read.
 pub fn verify(manifest_path: &Path, file: &Path, output: Output) -> Result<Rendered, MediaFailure> {
     let manifest = read_manifest(manifest_path)?;
     let mut source = FileSource::open(file).map_err(|cause| MediaFailure::Open {
         path: file.to_path_buf(),
         cause,
     })?;
-    let verification =
+    let comparison =
         adiungere_manifest::verify(&manifest, &mut source).map_err(|cause| MediaFailure::Read {
             path: file.to_path_buf(),
             cause,
         })?;
+    drop(source);
+    let credentials = crate::provenance::check_credentials(file, None)?;
+    let token = crate::provenance::check_token(manifest_path)?;
 
-    let negative = !verification.every_compared_subject_is_identical();
+    let negative = !comparison.every_compared_subject_is_identical()
+        || credentials
+            .as_ref()
+            .is_some_and(|check| check.credentials.state == adiungere_provenance::State::Invalid)
+        || token.as_ref().is_some_and(|check| check.mismatch.is_some());
+    let verified = Verified {
+        comparison,
+        credentials,
+        token,
+    };
     let text = match output {
-        Output::Json => json(&verification)?,
-        Output::Text => describe_verification(&verification, &manifest),
+        Output::Json => json(&verified)?,
+        Output::Text => describe_verified(&verified, &manifest),
     };
     Ok(Rendered { text, negative })
+}
+
+fn describe_verified(verified: &Verified, manifest: &Manifest) -> String {
+    let mut text = describe_verification(&verified.comparison, manifest);
+    let _ = writeln!(text);
+    match &verified.credentials {
+        Some(check) => {
+            crate::provenance::describe_credentials(&mut text, &check.credentials, check.tracks_differing);
+        },
+        None => {
+            let _ = writeln!(text, "  {}", render(Phrase::CredentialsNone, &[]));
+        },
+    }
+    if let Some(check) = &verified.token {
+        crate::provenance::describe_token(&mut text, check);
+    }
+    let _ = writeln!(text, "\n{}", render(Phrase::FactsOnly, &[]));
+    text
 }
 
 /// Renders a manifest as a report a person can read and act on.
@@ -323,6 +372,10 @@ struct Exported {
     report: ExportReport,
     /// The manifest of the output.
     manifest: Manifest,
+    /// The credentials embedded in the output, when it was signed, read back and checked.
+    credentials: Option<crate::provenance::CredentialsCheck>,
+    /// Which kind of credential signed the output, when it was signed.
+    credential: Option<adiungere_provenance::Kind>,
 }
 
 /// The remux report in the shape the answer carries.
@@ -333,6 +386,7 @@ struct ExportReport {
     wide_offsets: bool,
     renumbered: bool,
     references_dropped: u32,
+    credentials_left_out: bool,
     tracks: Vec<ExportedTrack>,
     preserved: Vec<String>,
 }
@@ -370,6 +424,7 @@ pub fn export(
     selection: &Selection,
     out: &Path,
     manifest_to: Option<&Path>,
+    signing: Option<&crate::provenance::Signing>,
     output: Output,
     stop: &AtomicBool,
 ) -> Result<Rendered, MediaFailure> {
@@ -389,10 +444,15 @@ pub fn export(
         }
     }
 
+    // The credential is built before anything is written, so a credential that cannot be built stops
+    // the export before it has cost a copy.
+    let credential = signing.map(crate::provenance::Signing::credential).transpose()?;
+
     let mut sources = open_sources(files, selection, out)?;
     let class = class_of(&sources);
     let report = write_output(&mut sources, &partial, output, stop)?;
-    let manifest = read_back(&partial, out, class, source_records(&sources, &report))?;
+    let records = source_records(&sources, &report);
+    let mut manifest = read_back(&partial, out, class, records.clone())?;
     if let Some(track) = track_not_carrying_its_source(&manifest) {
         let _ = std::fs::remove_file(&partial);
         return Err(MediaFailure::Mismatch {
@@ -400,10 +460,30 @@ pub fn export(
             track,
         });
     }
-    std::fs::rename(&partial, out).map_err(|cause| MediaFailure::Write {
-        path: out.to_path_buf(),
-        cause,
-    })?;
+
+    // Signing is the last step. The facts signed are the manifest of the file as written; the manifest
+    // written beside the output then describes the signed file, whose bytes the embedded store changed.
+    let credentials = if let Some(credential) = &credential {
+        let request = adiungere_provenance::Request {
+            asset: &partial,
+            sources: files.iter().map(PathBuf::as_path).collect(),
+            facts: &manifest,
+            placement: adiungere_provenance::Placement::Embedded,
+        };
+        let signed = adiungere_provenance::sign(&request, credential, Some(out));
+        let _ = std::fs::remove_file(&partial);
+        signed.map_err(|cause| MediaFailure::Provenance {
+            cause: cause.to_string(),
+        })?;
+        manifest = read_back(out, out, class, records)?;
+        crate::provenance::check_credentials(out, None)?
+    } else {
+        std::fs::rename(&partial, out).map_err(|cause| MediaFailure::Write {
+            path: out.to_path_buf(),
+            cause,
+        })?;
+        None
+    };
 
     let canonical = manifest
         .to_canonical_json()
@@ -422,6 +502,7 @@ pub fn export(
             wide_offsets: report.wide_offsets,
             renumbered: report.renumbered,
             references_dropped: report.references_dropped,
+            credentials_left_out: report.credentials_left_out,
             tracks: report
                 .tracks
                 .iter()
@@ -442,6 +523,8 @@ pub fn export(
                 .collect(),
         },
         manifest,
+        credentials,
+        credential: credential.as_ref().map(adiungere_provenance::Credential::kind),
     };
     let text = match output {
         Output::Json => json(&exported)?,
@@ -575,7 +658,7 @@ fn same_file(existing: &Path, written: &Path) -> bool {
 }
 
 /// The manifest's default place: beside the output, with the suffix appended to the whole file name.
-fn manifest_beside(out: &Path) -> PathBuf {
+pub(crate) fn manifest_beside(out: &Path) -> PathBuf {
     let mut name = out
         .file_name()
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
@@ -844,6 +927,9 @@ fn describe_export(exported: &Exported, sources: &[OpenSource]) -> String {
             )
         );
     }
+    if exported.report.credentials_left_out {
+        let _ = writeln!(text, "  {}", render(Phrase::ExportCredentialsLeftOut, &[]));
+    }
     let _ = writeln!(
         text,
         "  {}",
@@ -852,6 +938,12 @@ fn describe_export(exported: &Exported, sources: &[OpenSource]) -> String {
             &[("path", &exported.manifest_path.display().to_string())]
         )
     );
+    if let Some(check) = &exported.credentials {
+        crate::provenance::describe_credentials(&mut text, &check.credentials, check.tracks_differing);
+        if exported.credential == Some(adiungere_provenance::Kind::Ephemeral) {
+            let _ = writeln!(text, "  {}", render(Phrase::SignEphemeral, &[]));
+        }
+    }
     let _ = writeln!(text, "  {}", render(Phrase::ExportFaces, &[]));
     let _ = writeln!(text);
     let _ = writeln!(text, "{}", render(Phrase::FactsOnly, &[]));
@@ -1074,6 +1166,18 @@ fn describe_fingerprints(text: &mut String, manifest: &Manifest) {
                                 .nal_length_size
                                 .map_or_else(|| "none".to_owned(), |width| width.to_string())
                         ),
+                    ]
+                )
+            );
+            let _ = writeln!(
+                text,
+                "  {}",
+                render(
+                    Phrase::FingerprintConfiguration,
+                    &[
+                        ("index", &track.index.to_string()),
+                        ("box", &fingerprint.configuration_box),
+                        ("digest", &fingerprint.configuration_sha256.to_string()),
                     ]
                 )
             );
@@ -1312,8 +1416,6 @@ fn describe_verification(verification: &Verification, manifest: &Manifest) -> St
         };
         let _ = writeln!(text, "  {line}");
     }
-
-    let _ = writeln!(text, "\n{}", render(Phrase::FactsOnly, &[]));
     text
 }
 

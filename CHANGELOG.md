@@ -10,16 +10,16 @@ because one repository publishes several things.
 
 - Repository foundation: layout, licence, contribution, conduct and security policies, and the publication
   rule that a tracked file states what the code guarantees rather than what once failed.
-- Fourteen decision records for the decisions the product rests on: one repository; one Rust core with thin
+- Fifteen decision records for the decisions the product rests on: one repository; one Rust core with thin
   shells and each platform's own media engine; Apache-2.0 with a notice and no contributor agreement; boxes
   as opaque byte ranges unless a value is needed; a product that reports facts and never returns a verdict;
   every export through the core; one desktop answer per platform; a website that runs in the browser with a
   service that sees only digests; sign last with a single key custodian; English as the source language with
   French shipping alongside the first product; documentation rendered from the repository; signed commits
-  with no trailers; no update check in any application; and the verification surface named for a place
-  rather than for a conclusion.
+  with no trailers; no update check in any application; the verification surface named for a place rather
+  than for a conclusion; and what a relayed signature proves, stated so that it cannot be read as more.
 - Roadmap of eleven milestones, each ending in a named demonstration, with the first real product at M4.
-- Evidence register of 40 probes, each with a question, a method, the decision it settles and one of four
+- Evidence register of 41 probes, each with a question, a method, the decision it settles and one of four
   verdicts, where `unavailable` and `not started` are never read as a pass.
 - Command line reading that register as data: a listing that filters by verdict and milestone, a detail view,
   and a reconciliation that fails when the register and the roadmap disagree. Its parser refuses a register
@@ -27,8 +27,9 @@ because one repository publishes several things.
   underneath.
 - Rust workspace with the toolchain pinned patch-exact in one file at the root, unsafe code forbidden
   workspace-wide, the panicking constructs denied outside tests, exact dependency versions with the lock file
-  committed, and a supply-chain policy admitting twelve named licences and nothing copyleft beyond the file
-  level, no unknown registry and no git source, applied to the fuzzing project as well as the workspace.
+  committed, and a supply-chain policy admitting thirteen named licences and nothing copyleft beyond the
+  file level, no unknown registry and no git source, applied to the fuzzing project as well as the
+  workspace.
 - The guarantee suite, each member watched failing against a deliberate violation before being trusted, and
   each scanning member carrying a detection test and a reach test so it cannot pass by reading nothing. Two of
   them reconcile the documentation with the repository, so a count written in a README cannot quietly stop
@@ -113,5 +114,34 @@ because one repository publishes several things.
   sources under any spelling. The output read back is held to its sources' decoder configuration digest
   as well as their sample digest.
 - The corpus gains a recording whose rear track references the front and the audio tracks.
+- Provenance crate over the open provenance standard's library: an output signed last, with the manifest
+  embedded in the reserved box and the hard binding over the final bytes; a recording signed beside, under
+  its stem, and not one byte of it touched; every manifest naming the sources as ingredients, the parent
+  first, the actions from the export class alone, and the adiungere manifest verbatim as the
+  `com.adiungere.integrity` assertion; a time-stamping authority asked at signing when one is configured;
+  a token over any bytes obtained and checked on its own; and reading back with the validator's state and
+  never a fourth word. A delegated signer makes the signature elsewhere from a few kilobytes that carry no
+  media, which is the shape the signing service takes.
+- Command line: `export --sign`, `sign`, `timestamp`, and `verify` extended to the credentials a file
+  carries and the token beside its manifest. A credential is generated for the run unless a chain and a
+  key are given, and every answer says when it is on no trust list. RSA keys are refused while the RSA
+  crate's advisory stands.
+- An export of a signed file leaves the source's manifest store out, because a store is bound to the bytes
+  of the file it was written into, and says so.
+- The report prints the decoder configuration digest beside the sample digest, so that every number the
+  signed facts carry is in it.
+- The standard's own validator pinned, fetched by digest and run by four guarantees as the independent
+  reader of what the product signs; the public time-stamping authority asked nightly, the one suite that
+  reaches the network.
+- Four further guarantees enforced, each watched failing: a rewrite after signing is invalid and signing
+  again restores it; a recording with credentials beside it keeps its bytes and its time; the report, the
+  signed facts and the manifest beside the file agree on every digest and action; the signer and the state
+  shown are the validator's.
+- Decision record on what a relayed signature proves, after probe P11 measured the split the library
+  offers; probes P04, P05 and P26 recorded, the last with the forensic bodies' sentences read in their
+  documents and the unsourced legal claim retired; probe P41 for the public check page, which a person
+  performs; the verification guide for the driver, the claims handler and the lawyer.
+- The published schema written with every object's keys sorted, so that it reads the same whatever crates
+  are compiled alongside the manifest crate.
 
 [Unreleased]: https://github.com/LennyObez/adiungere/commits/main

@@ -1,6 +1,6 @@
 [package]
-name = "adiungere-cli"
-description = "The adiungere command line: the executable specification of what the product claims."
+name = "adiungere-provenance"
+description = "Content Credentials for what adiungere writes and sidecar credentials for what it reads, signed last, with a time stamp, and read back with an honest trust state."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,26 +12,15 @@ keywords.workspace = true
 categories.workspace = true
 publish.workspace = true
 
-[lib]
-name = "adiungere_cli"
-path = "src/lib.rs"
-
-[[bin]]
-name = "adiungere"
-path = "src/main.rs"
-
 [dependencies]
-adiungere-isobmff = { path = "../adiungere-isobmff" }
 adiungere-manifest = { path = "../adiungere-manifest" }
-adiungere-provenance = { path = "../adiungere-provenance" }
-adiungere-scan = { path = "../adiungere-scan" }
-clap = { workspace = true }
-ctrlc = { workspace = true }
+c2pa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
 adiungere-fixtures = { path = "../adiungere-fixtures" }
+adiungere-isobmff = { path = "../adiungere-isobmff" }
 
 [lints]
 workspace = true
