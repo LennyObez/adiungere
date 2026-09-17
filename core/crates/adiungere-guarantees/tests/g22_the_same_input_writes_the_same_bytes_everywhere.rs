@@ -62,7 +62,11 @@ fn the_reader_crate_pins_the_three_mode_digests_and_they_are_what_the_writer_pro
     ];
 
     // Assert
-    assert_eq!(pinned.len(), 3, "three modes are pinned in the reader crate's tests");
+    assert_eq!(
+        pinned.len(),
+        3,
+        "three modes are pinned in the reader crate's tests"
+    );
     for (name, digest) in produced {
         let pin = pinned.iter().find(|(pinned_name, _)| pinned_name == name);
         assert_eq!(
